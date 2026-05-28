@@ -1,20 +1,23 @@
 import { Form, Head } from '@inertiajs/react';
-import { useRef } from 'react';
-import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
+import { useMemo, useRef } from 'react';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/security';
+import { edit } from '@/routes/superadmin/security';
+import { update } from '@/routes/superadmin/user-password';
 
 type Props = {
     passwordRules: string;
 };
 
-export default function Security(props: Props) {
+export default function SuperAdminSecuritySettings(props: Props) {
     const passwordInput = useRef<HTMLInputElement>(null);
     const currentPasswordInput = useRef<HTMLInputElement>(null);
+    const updateRoute = useMemo(() => update(), []);
+
+    console.log('SuperAdmin security settings loaded');
 
     return (
         <>
@@ -30,7 +33,8 @@ export default function Security(props: Props) {
                 />
 
                 <Form
-                    {...SecurityController.update.form()}
+                    action={updateRoute.url}
+                    method={updateRoute.method}
                     options={{
                         preserveScroll: true,
                     }}
@@ -67,7 +71,9 @@ export default function Security(props: Props) {
                                     placeholder="Current password"
                                 />
 
-                                <InputError message={errors.current_password} />
+                                <InputError
+                                    message={errors.current_password}
+                                />
                             </div>
 
                             <div className="grid gap-2">
@@ -121,7 +127,7 @@ export default function Security(props: Props) {
     );
 }
 
-Security.layout = {
+SuperAdminSecuritySettings.layout = {
     breadcrumbs: [
         {
             title: 'Security settings',
@@ -129,3 +135,4 @@ Security.layout = {
         },
     ],
 };
+

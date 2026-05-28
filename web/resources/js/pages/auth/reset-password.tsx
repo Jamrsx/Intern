@@ -14,12 +14,15 @@ type Props = {
 };
 
 export default function ResetPassword({ token, email, passwordRules }: Props) {
+    const updateRoute = update();
+
     return (
         <>
             <Head title="Reset password" />
 
             <Form
-                {...update.form()}
+                action={updateRoute.url}
+                method={updateRoute.method}
                 transform={(data) => ({ ...data, token, email })}
                 resetOnSuccess={['password', 'password_confirmation']}
             >

@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
@@ -9,27 +9,34 @@ import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
 import type { NavItem } from '@/types';
-
-const sidebarNavItems: NavItem[] = [
-    {
-        title: 'Profile',
-        href: edit(),
-        icon: null,
-    },
-    {
-        title: 'Security',
-        href: editSecurity(),
-        icon: null,
-    },
-    {
-        title: 'Appearance',
-        href: editAppearance(),
-        icon: null,
-    },
-];
+import type { Auth } from '@/types';
+import { edit as editSuperAdminAppearance } from '@/routes/superadmin/appearance';
+import { edit as editSuperAdminProfile } from '@/routes/superadmin/profile';
+import { edit as editSuperAdminSecurity } from '@/routes/superadmin/security';
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { auth } = usePage<{ auth: Auth }>().props;
+
+    const isSuperAdmin = auth.user?.role?.name === 'super_admin';
+
+    const sidebarNavItems: NavItem[] = [
+        {
+            title: 'Profile',
+            href: isSuperAdmin ? editSuperAdminProfile() : edit(),
+            icon: null,
+        },
+        {
+            title: 'Security',
+            href: isSuperAdmin ? editSuperAdminSecurity() : editSecurity(),
+            icon: null,
+        },
+        {
+            title: 'Appearance',
+            href: isSuperAdmin ? editSuperAdminAppearance() : editAppearance(),
+            icon: null,
+        },
+    ];
 
     return (
         <div className="px-4 py-6">

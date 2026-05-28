@@ -19,7 +19,11 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
-        return Inertia::render('settings/profile', [
+        $component = $request->is('superadmin/settings/*')
+            ? 'superAdmin/settings/profile'
+            : 'settings/profile';
+
+        return Inertia::render($component, [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => $request->session()->get('status'),
         ]);
@@ -40,7 +44,9 @@ class ProfileController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Profile updated.')]);
 
-        return to_route('profile.edit');
+        return $request->user()?->loadMissing('role')->hasRole('super_admin')
+            ? to_route('superadmin.profile.edit')
+            : to_route('profile.edit');
     }
 
     /**

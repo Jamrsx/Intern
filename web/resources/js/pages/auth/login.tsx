@@ -16,12 +16,15 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword }: Props) {
+    const storeRoute = store();
+
     return (
         <>
             <Head title="Log in" />
 
             <Form
-                {...store.form()}
+                action={storeRoute.url}
+                method={storeRoute.method}
                 resetOnSuccess={['password']}
                 className="flex flex-col gap-6"
             >

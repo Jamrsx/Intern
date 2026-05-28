@@ -21,7 +21,11 @@ class SecurityController extends Controller
             'passwordRules' => Password::defaults()->toPasswordRulesString(),
         ];
 
-        return Inertia::render('settings/security', $props);
+        $component = $request->is('superadmin/settings/*')
+            ? 'superAdmin/settings/security'
+            : 'settings/security';
+
+        return Inertia::render($component, $props);
     }
 
     /**

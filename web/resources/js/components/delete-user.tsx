@@ -1,6 +1,5 @@
-import { Form } from '@inertiajs/react';
+import { Form, usePage } from '@inertiajs/react';
 import { useRef } from 'react';
-import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -15,9 +14,17 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { destroy as destroyProfile } from '@/routes/profile';
+import { destroy as destroySuperAdminProfile } from '@/routes/superadmin/profile';
+import type { Auth } from '@/types';
 
 export default function DeleteUser() {
     const passwordInput = useRef<HTMLInputElement>(null);
+    const { auth } = usePage<{ auth: Auth }>().props;
+    const destroyRoute =
+        auth.user?.role?.name === 'super_admin'
+            ? destroySuperAdminProfile()
+            : destroyProfile();
 
     return (
         <div className="space-y-6">
@@ -55,7 +62,8 @@ export default function DeleteUser() {
                         </DialogDescription>
 
                         <Form
-                            {...ProfileController.destroy.form()}
+                            action={destroyRoute.url}
+                            method={destroyRoute.method}
                             options={{
                                 preserveScroll: true,
                             }}

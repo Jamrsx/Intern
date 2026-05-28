@@ -1,7 +1,6 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { Pencil, Plus, Users } from 'lucide-react';
 import { useState } from 'react';
-import DeanController from '@/actions/App/Http/Controllers/SuperAdmin/DeanController';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { AppModal } from '@/components/superadmin/app-modal';
@@ -13,7 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { index as deansIndex } from '@/routes/superadmin/deans';
+import { destroy, index as deansIndex, store, update } from '@/routes/superadmin/deans';
 
 type DeanCourse = {
     id: number;
@@ -37,6 +36,7 @@ type Props = {
 export default function Deans({ deans }: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editDean, setEditDean] = useState<Dean | null>(null);
+    const storeRoute = store();
 
     console.log('Deans index loaded', { count: deans.length });
 
@@ -49,7 +49,7 @@ export default function Deans({ deans }: Props) {
             return;
         }
 
-        router.delete(DeanController.destroy.url(dean.id), {
+        router.delete(destroy(dean.id).url, {
             preserveScroll: true,
         });
     };
@@ -197,7 +197,8 @@ export default function Deans({ deans }: Props) {
                 description="Create a new dean account for course management."
             >
                 <Form
-                    {...DeanController.store.form()}
+                    action={storeRoute.url}
+                    method={storeRoute.method}
                     onSuccess={() => setCreateOpen(false)}
                     className="space-y-4"
                 >
@@ -273,7 +274,8 @@ export default function Deans({ deans }: Props) {
                     description={`Update account for ${editDean.name}`}
                 >
                     <Form
-                        {...DeanController.update.form(editDean.id)}
+                        action={update(editDean.id).url}
+                        method={update(editDean.id).method}
                         onSuccess={() => setEditDean(null)}
                         className="space-y-4"
                     >

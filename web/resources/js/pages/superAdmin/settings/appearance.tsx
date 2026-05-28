@@ -1,9 +1,11 @@
 import { Head } from '@inertiajs/react';
 import AppearanceTabs from '@/components/appearance-tabs';
 import Heading from '@/components/heading';
-import { edit as editAppearance } from '@/routes/appearance';
+import { edit } from '@/routes/superadmin/appearance';
 
-export default function Appearance() {
+export default function SuperAdminAppearanceSettings() {
+    console.log('SuperAdmin appearance settings loaded');
+
     return (
         <>
             <Head title="Appearance settings" />
@@ -22,11 +24,12 @@ export default function Appearance() {
     );
 }
 
-Appearance.layout = {
+SuperAdminAppearanceSettings.layout = {
     breadcrumbs: [
         {
             title: 'Appearance settings',
-            href: editAppearance(),
+            href: edit(),
         },
     ],
 };
+

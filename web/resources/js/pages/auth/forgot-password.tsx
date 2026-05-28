@@ -10,6 +10,8 @@ import { login } from '@/routes';
 import { email } from '@/routes/password';
 
 export default function ForgotPassword({ status }: { status?: string }) {
+    const emailRoute = email();
+
     return (
         <>
             <Head title="Forgot password" />
@@ -21,7 +23,7 @@ export default function ForgotPassword({ status }: { status?: string }) {
             )}
 
             <div className="space-y-6">
-                <Form {...email.form()}>
+                <Form action={emailRoute.url} method={emailRoute.method}>
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">

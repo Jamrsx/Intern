@@ -1,7 +1,6 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { BookOpen, Pencil, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import CourseController from '@/actions/App/Http/Controllers/SuperAdmin/CourseController';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { PageHeader } from '@/components/superadmin/page-header';
@@ -19,7 +18,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { index as coursesIndex } from '@/routes/superadmin/courses';
+import { destroy, index as coursesIndex, store, update } from '@/routes/superadmin/courses';
 
 type DeanOption = {
     id: number;
@@ -105,6 +104,7 @@ export default function Courses({
 }: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editCourse, setEditCourse] = useState<Course | null>(null);
+    const storeRoute = store();
 
     const createDeans = useMemo(
         () => assignableDeans(deansForAssignment),
@@ -129,7 +129,7 @@ export default function Courses({
             return;
         }
 
-        router.delete(CourseController.destroy.url(course.id), {
+        router.delete(destroy(course.id).url, {
             preserveScroll: true,
         });
     };
@@ -281,7 +281,8 @@ export default function Courses({
                 description="Create a course and set required OJT render hours."
             >
                 <Form
-                    {...CourseController.store.form()}
+                    action={storeRoute.url}
+                    method={storeRoute.method}
                     onSuccess={() => setCreateOpen(false)}
                     className="space-y-4"
                 >
@@ -358,7 +359,8 @@ export default function Courses({
                     description={`${editCourse.code} — ${editCourse.name}`}
                 >
                     <Form
-                        {...CourseController.update.form(editCourse.id)}
+                        action={update(editCourse.id).url}
+                        method={update(editCourse.id).method}
                         onSuccess={() => setEditCourse(null)}
                         className="space-y-4"
                         key={editCourse.id}
