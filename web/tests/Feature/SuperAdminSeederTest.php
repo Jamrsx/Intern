@@ -13,7 +13,7 @@ it('seeds the super admin user with the super_admin role', function () {
     $this->seed(SuperAdminSeeder::class);
 
     $superAdminRole = Role::query()->where('name', 'super_admin')->first();
-    $user = User::query()->where('email', 'superadmin@occ.edu.ph')->first();
+    $user = User::query()->where('email', 'superadmin@gmail.com')->first();
 
     expect($superAdminRole)->not->toBeNull()
         ->and($user)->not->toBeNull()

@@ -21,9 +21,9 @@ Legend:
 
 ### 2) Super Admin module (Courses + Deans)
 
-- [ ] Deans: create/view/update/disable
-- [ ] Courses: create/view/update/disable
-- [ ] Assign dean to course
+- [x] Deans: create/view/update/disable
+- [x] Courses: create/view/update/disable
+- [x] Assign dean to course
 
 ### 3) Dean module (Students + required hours)
 

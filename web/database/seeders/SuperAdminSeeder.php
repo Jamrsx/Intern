@@ -8,6 +8,12 @@ use Illuminate\Database\Seeder;
 
 class SuperAdminSeeder extends Seeder
 {
+    private const NAME = 'Super Admin';
+
+    private const EMAIL = 'superadmin@gmail.com';
+
+    private const PASSWORD = 'sadmin123';
+
     /**
      * Run the database seeds.
      */
@@ -21,19 +27,17 @@ class SuperAdminSeeder extends Seeder
             return;
         }
 
-        $email = (string) env('SUPER_ADMIN_EMAIL', 'superadmin@occ.edu.ph');
-
         User::query()->updateOrCreate(
-            ['email' => $email],
+            ['email' => self::EMAIL],
             [
-                'name' => (string) env('SUPER_ADMIN_NAME', 'Super Admin'),
-                'password' => (string) env('SUPER_ADMIN_PASSWORD', 'password'),
+                'name' => self::NAME,
+                'password' => self::PASSWORD,
                 'role_id' => $role->id,
                 'is_active' => true,
                 'email_verified_at' => now(),
             ],
         );
 
-        $this->command?->info("Super Admin seeded: {$email}");
+        $this->command?->info('Super Admin seeded: '.self::EMAIL);
     }
 }
