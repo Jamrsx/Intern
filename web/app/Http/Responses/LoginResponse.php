@@ -15,6 +15,7 @@ class LoginResponse implements LoginResponseContract
 
         $redirect = match ($user?->role?->name) {
             'super_admin' => route('superadmin.dashboard', absolute: false),
+            'dean' => route('deans.dashboard', absolute: false),
             default => route('dashboard', absolute: false),
         };
 

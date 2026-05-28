@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Controllers\Dean\DashboardController as DeanDashboardController;
+use App\Http\Controllers\Dean\CompanyController as DeanCompanyController;
+use App\Http\Controllers\Dean\SectionController as DeanSectionController;
+use App\Http\Controllers\Dean\StudentController as DeanStudentController;
+use App\Http\Controllers\Dean\SupervisorController as DeanSupervisorController;
 use App\Http\Controllers\SuperAdmin\CourseController as SuperAdminCourseController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\DeanController as SuperAdminDeanController;
@@ -11,6 +16,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         if (auth()->user()?->loadMissing('role')->hasRole('super_admin')) {
             return redirect()->route('superadmin.dashboard');
+        }
+        if (auth()->user()?->loadMissing('role')->hasRole('dean')) {
+            return redirect()->route('deans.dashboard');
         }
 
         return inertia('dashboard');
@@ -28,6 +36,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::resource('courses', SuperAdminCourseController::class)
                 ->except(['show', 'create', 'edit']);
+        });
+
+    Route::middleware('dean')
+        ->prefix('deans')
+        ->name('deans.')
+        ->group(function () {
+            Route::get('dashboard', [DeanDashboardController::class, 'index'])
+                ->name('dashboard');
+
+            Route::get('students', [DeanStudentController::class, 'index'])->name('students.index');
+            Route::get('companies', [DeanCompanyController::class, 'index'])->name('companies.index');
+            Route::get('sections', [DeanSectionController::class, 'index'])->name('sections.index');
+            Route::get('supervisors', [DeanSupervisorController::class, 'index'])->name('supervisors.index');
         });
 });
 

@@ -13,27 +13,43 @@ import type { Auth } from '@/types';
 import { edit as editSuperAdminAppearance } from '@/routes/superadmin/appearance';
 import { edit as editSuperAdminProfile } from '@/routes/superadmin/profile';
 import { edit as editSuperAdminSecurity } from '@/routes/superadmin/security';
+import { edit as editDeanAppearance } from '@/routes/deans/settings/appearance';
+import { edit as editDeanProfile } from '@/routes/deans/settings/profile';
+import { edit as editDeanSecurity } from '@/routes/deans/settings/security';
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
     const { auth } = usePage<{ auth: Auth }>().props;
 
     const isSuperAdmin = auth.user?.role?.name === 'super_admin';
+    const isDean = auth.user?.role?.name === 'dean';
 
     const sidebarNavItems: NavItem[] = [
         {
             title: 'Profile',
-            href: isSuperAdmin ? editSuperAdminProfile() : edit(),
+            href: isSuperAdmin
+                ? editSuperAdminProfile()
+                : isDean
+                    ? editDeanProfile()
+                    : edit(),
             icon: null,
         },
         {
             title: 'Security',
-            href: isSuperAdmin ? editSuperAdminSecurity() : editSecurity(),
+            href: isSuperAdmin
+                ? editSuperAdminSecurity()
+                : isDean
+                    ? editDeanSecurity()
+                    : editSecurity(),
             icon: null,
         },
         {
             title: 'Appearance',
-            href: isSuperAdmin ? editSuperAdminAppearance() : editAppearance(),
+            href: isSuperAdmin
+                ? editSuperAdminAppearance()
+                : isDean
+                    ? editDeanAppearance()
+                    : editAppearance(),
             icon: null,
         },
     ];

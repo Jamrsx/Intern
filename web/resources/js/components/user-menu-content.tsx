@@ -11,6 +11,7 @@ import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import { edit as editSuperAdminProfile } from '@/routes/superadmin/profile';
+import { edit as editDeanProfile } from '@/routes/deans/settings/profile';
 import type { User } from '@/types';
 
 type Props = {
@@ -21,7 +22,11 @@ export function UserMenuContent({ user }: Props) {
     const cleanup = useMobileNavigation();
 
     const settingsHref =
-        user.role?.name === 'super_admin' ? editSuperAdminProfile() : edit();
+        user.role?.name === 'super_admin'
+            ? editSuperAdminProfile()
+            : user.role?.name === 'dean'
+                ? editDeanProfile()
+                : edit();
 
     const handleLogout = () => {
         cleanup();

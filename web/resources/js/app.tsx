@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
+import DeanLayout from '@/layouts/dean-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import SuperAdminLayout from '@/layouts/superadmin-layout';
 
@@ -19,6 +20,10 @@ createInertiaApp({
                 return AuthLayout;
             case name.startsWith('settings/'):
                 return [AppLayout, SettingsLayout];
+            case name.startsWith('deans/settings/'):
+                return [DeanLayout, SettingsLayout];
+            case name.startsWith('deans/'):
+                return DeanLayout;
             case name.startsWith('superAdmin/settings/'):
                 return [SuperAdminLayout, SettingsLayout];
             case name.startsWith('superAdmin/'):

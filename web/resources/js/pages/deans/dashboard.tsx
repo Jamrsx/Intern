@@ -1,0 +1,98 @@
+import { Head, usePage } from '@inertiajs/react';
+import { BookOpen, Users } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { dashboard as deanDashboard } from '@/routes/deans';
+import type { Auth } from '@/types';
+
+type Course = {
+    id: number;
+    code: string;
+    name: string;
+    required_hours: number;
+    is_active: boolean;
+} | null;
+
+type Props = {
+    auth: Auth;
+    course: Course;
+    stats: {
+        students: number;
+    };
+};
+
+export default function DeanDashboard() {
+    const { auth, course, stats } = usePage<Props>().props;
+
+    console.log('Dean dashboard loaded', { user: auth.user, course, stats });
+
+    return (
+        <>
+            <Head title="Dean Dashboard" />
+
+            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <div className="rounded-2xl bg-brand p-6 text-brand-foreground shadow-lg md:p-8">
+                    <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+                        Welcome back, {auth.user.name}
+                    </h1>
+                    <p className="mt-1 text-sm text-brand-foreground/80">
+                        Manage students, sections, companies, and supervisors for your assigned course.
+                    </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Card className="border-sidebar-border/70 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Assigned Course
+                            </CardTitle>
+                            <div className="rounded-lg bg-brand/15 p-2">
+                                <BookOpen className="size-4 text-brand" />
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {course ? (
+                                <>
+                                    <p className="text-lg font-semibold">{course.code}</p>
+                                    <CardDescription className="mt-1">
+                                        {course.name} • {course.required_hours} hrs
+                                    </CardDescription>
+                                </>
+                            ) : (
+                                <CardDescription>
+                                    No course assigned yet. Ask Super Admin to assign you to a course.
+                                </CardDescription>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-sidebar-border/70 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Students
+                            </CardTitle>
+                            <div className="rounded-lg bg-brand/15 p-2">
+                                <Users className="size-4 text-brand" />
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-3xl font-bold">{stats.students}</p>
+                            <CardDescription className="mt-1">
+                                Total students under your course
+                            </CardDescription>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </>
+    );
+}
+
+DeanDashboard.layout = {
+    breadcrumbs: [
+        {
+            title: 'Dashboard',
+            href: deanDashboard(),
+        },
+    ],
+};
+

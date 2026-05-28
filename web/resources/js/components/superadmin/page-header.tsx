@@ -6,6 +6,7 @@ type PageHeaderProps = {
     description: string;
     icon: LucideIcon;
     action?: React.ReactNode;
+    badgeText?: string;
 };
 
 export function PageHeader({
@@ -13,6 +14,7 @@ export function PageHeader({
     description,
     icon: Icon,
     action,
+    badgeText = 'Super Admin',
 }: PageHeaderProps) {
     return (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -29,7 +31,7 @@ export function PageHeader({
                             variant="secondary"
                             className="bg-brand/20 text-brand-foreground"
                         >
-                            Super Admin
+                            {badgeText}
                         </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">

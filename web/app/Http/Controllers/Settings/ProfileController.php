@@ -19,9 +19,11 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
-        $component = $request->is('superadmin/settings/*')
-            ? 'superAdmin/settings/profile'
-            : 'settings/profile';
+        $component = match (true) {
+            $request->is('superadmin/settings/*') => 'superAdmin/settings/profile',
+            $request->is('deans/settings/*') => 'deans/settings/profile',
+            default => 'settings/profile',
+        };
 
         return Inertia::render($component, [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
@@ -44,9 +46,17 @@ class ProfileController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Profile updated.')]);
 
-        return $request->user()?->loadMissing('role')->hasRole('super_admin')
-            ? to_route('superadmin.profile.edit')
-            : to_route('profile.edit');
+        $user = $request->user()?->loadMissing('role');
+
+        if ($user?->hasRole('super_admin')) {
+            return to_route('superadmin.profile.edit');
+        }
+
+        if ($user?->hasRole('dean')) {
+            return to_route('deans.settings.profile.edit');
+        }
+
+        return to_route('profile.edit');
     }
 
     /**
