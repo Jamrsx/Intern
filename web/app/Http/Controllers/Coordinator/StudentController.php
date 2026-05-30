@@ -68,8 +68,8 @@ class StudentController extends Controller
                     ]),
                 ])
                 ->all(),
-            'companies' => $this->companyOptions(),
-            'supervisors' => $this->supervisorOptions(),
+            'companies' => $this->companyOptions($section),
+            'supervisors' => $this->supervisorOptions($section),
         ]);
     }
 
@@ -230,10 +230,15 @@ class StudentController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function companyOptions(): array
+    private function companyOptions(?Section $section): array
     {
+        if ($section === null) {
+            return [];
+        }
+
         return Company::query()
             ->with(['departments' => fn ($query) => $query->where('is_active', true)->orderBy('name')])
+            ->where('course_id', $section->course_id)
             ->where('is_active', true)
             ->orderBy('name')
             ->get()
@@ -252,11 +257,16 @@ class StudentController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function supervisorOptions(): array
+    private function supervisorOptions(?Section $section): array
     {
+        if ($section === null) {
+            return [];
+        }
+
         return Supervisor::query()
             ->with('user:id,name')
             ->where('is_active', true)
+            ->whereHas('company', fn ($query) => $query->where('course_id', $section->course_id))
             ->orderBy('id')
             ->get()
             ->map(fn (Supervisor $supervisor) => [

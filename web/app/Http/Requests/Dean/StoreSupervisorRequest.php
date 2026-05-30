@@ -9,7 +9,8 @@ class StoreSupervisorRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('dean') ?? false;
+        return ($this->user()?->hasRole('dean') ?? false)
+            && $this->user()?->courseAsDean !== null;
     }
 
     /**
@@ -17,13 +18,18 @@ class StoreSupervisorRequest extends FormRequest
      */
     public function rules(): array
     {
+        $courseId = $this->user()?->courseAsDean?->id;
+
         return [
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'company_id' => [
                 'required',
                 'integer',
-                Rule::exists('companies', 'id')->where('is_active', true),
+                Rule::exists('companies', 'id')->where(function ($query) use ($courseId) {
+                    $query->where('course_id', $courseId)
+                        ->where('is_active', true);
+                }),
             ],
             'department_id' => [
                 'nullable',
@@ -36,6 +42,14 @@ class StoreSupervisorRequest extends FormRequest
                 }),
             ],
             'position_title' => ['nullable', 'string', 'max:100'],
+            'password' => [
+                Rule::requiredIf(fn () => ! $this->boolean('send_credentials_email')),
+                'nullable',
+                'string',
+                'min:8',
+                'max:255',
+            ],
+            'send_credentials_email' => ['sometimes', 'boolean'],
         ];
     }
 

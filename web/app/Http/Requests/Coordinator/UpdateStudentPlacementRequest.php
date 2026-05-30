@@ -30,8 +30,20 @@ class UpdateStudentPlacementRequest extends FormRequest
      */
     public function rules(): array
     {
+        /** @var Student $student */
+        $student = $this->route('student');
+        $student->loadMissing('section');
+        $courseId = $student->section?->course_id;
+
         return [
-            'company_id' => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true)],
+            'company_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('companies', 'id')->where(function ($query) use ($courseId) {
+                    $query->where('course_id', $courseId)
+                        ->where('is_active', true);
+                }),
+            ],
             'department_id' => [
                 'nullable',
                 'integer',

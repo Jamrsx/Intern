@@ -30,8 +30,8 @@ class StudentController extends Controller
 
         $sections = $this->availableSections($course);
         $students = $this->studentList($course);
-        $companies = $this->companyOptions();
-        $supervisors = $this->supervisorOptions();
+        $companies = $this->companyOptions($course);
+        $supervisors = $this->supervisorOptions($course);
 
         return Inertia::render('deans/students', [
             'course' => $course ? [
@@ -408,10 +408,15 @@ class StudentController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function companyOptions(): array
+    private function companyOptions(?Course $course): array
     {
+        if ($course === null) {
+            return [];
+        }
+
         return Company::query()
             ->with(['departments' => fn ($query) => $query->where('is_active', true)->orderBy('name')])
+            ->where('course_id', $course->id)
             ->where('is_active', true)
             ->orderBy('name')
             ->get()
@@ -430,11 +435,16 @@ class StudentController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function supervisorOptions(): array
+    private function supervisorOptions(?Course $course): array
     {
+        if ($course === null) {
+            return [];
+        }
+
         return Supervisor::query()
             ->with('user:id,name')
             ->where('is_active', true)
+            ->whereHas('company', fn ($query) => $query->where('course_id', $course->id))
             ->orderBy('id')
             ->get()
             ->map(fn (Supervisor $supervisor) => [

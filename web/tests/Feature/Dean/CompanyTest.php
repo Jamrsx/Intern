@@ -1,17 +1,29 @@
 <?php
 
 use App\Models\Company;
+use App\Models\Course;
 use App\Models\Department;
 use App\Models\Role;
+use App\Models\SchoolYear;
+use App\Models\Section;
 use App\Models\Student;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
+use Database\Seeders\SchoolYearSeeder;
 
 it('allows a dean to manage companies and departments', function () {
     $this->seed(RoleSeeder::class);
 
     $dean = User::factory()->create([
         'role_id' => Role::query()->where('name', 'dean')->value('id'),
+    ]);
+
+    $course = Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => $dean->id,
+        'is_active' => true,
     ]);
 
     $this->actingAs($dean)
@@ -28,6 +40,7 @@ it('allows a dean to manage companies and departments', function () {
     $company = Company::query()->where('name', 'Opol LGU')->first();
 
     expect($company)->not->toBeNull();
+    expect($company?->course_id)->toBe($course->id);
     expect($company?->address)->toBe('Opol, Misamis Oriental');
     expect($company?->departments()->pluck('name')->all())->toBe(['Finance', 'HR']);
 
@@ -66,19 +79,85 @@ it('allows a dean to manage companies and departments', function () {
     expect($department->fresh()?->is_active)->toBeFalse();
 });
 
+it('scopes companies to the logged-in dean course', function () {
+    $this->seed(RoleSeeder::class);
+
+    $bsitDean = User::factory()->create([
+        'role_id' => Role::query()->where('name', 'dean')->value('id'),
+        'email' => 'bsit.dean@gmail.com',
+    ]);
+
+    $educDean = User::factory()->create([
+        'role_id' => Role::query()->where('name', 'dean')->value('id'),
+        'email' => 'educ.dean@gmail.com',
+    ]);
+
+    $bsitCourse = Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => $bsitDean->id,
+        'is_active' => true,
+    ]);
+
+    $educCourse = Course::query()->create([
+        'code' => 'BEED',
+        'name' => 'Bachelor of Elementary Education',
+        'required_hours' => 486,
+        'dean_user_id' => $educDean->id,
+        'is_active' => true,
+    ]);
+
+    $bsitCompany = Company::query()->create([
+        'course_id' => $bsitCourse->id,
+        'name' => 'BSIT Partner Company',
+        'address' => 'Cagayan de Oro',
+        'is_active' => true,
+    ]);
+
+    $bsitCompany->departments()->create([
+        'name' => 'IT',
+        'is_active' => true,
+    ]);
+
+    Company::query()->create([
+        'course_id' => $educCourse->id,
+        'name' => 'EDUC Partner Company',
+        'address' => 'Opol',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($educDean)
+        ->get(route('deans.companies.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('deans/companies')
+            ->has('companies', 1)
+            ->where('companies.0.name', 'EDUC Partner Company')
+            ->missing('companies.1'));
+
+    $this->actingAs($educDean)
+        ->patch(route('deans.companies.update', $bsitCompany), [
+            'name' => 'Hacked Company',
+            'address' => 'Should not work',
+            'is_active' => '1',
+        ])
+        ->assertForbidden();
+});
+
 it('blocks deactivating a company with active students', function () {
     $this->seed(RoleSeeder::class);
-    $this->seed(\Database\Seeders\SchoolYearSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
 
     $deanRoleId = Role::query()->where('name', 'dean')->value('id');
     $internRoleId = Role::query()->where('name', 'intern')->value('id');
-    $schoolYear = \App\Models\SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
+    $schoolYear = SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
 
     $dean = User::factory()->create([
         'role_id' => $deanRoleId,
     ]);
 
-    $course = \App\Models\Course::query()->create([
+    $course = Course::query()->create([
         'code' => 'BSIT',
         'name' => 'Bachelor of Science in Information Technology',
         'required_hours' => 486,
@@ -86,7 +165,7 @@ it('blocks deactivating a company with active students', function () {
         'is_active' => true,
     ]);
 
-    $section = \App\Models\Section::query()->create([
+    $section = Section::query()->create([
         'course_id' => $course->id,
         'school_year_id' => $schoolYear->id,
         'name' => '4A',
@@ -94,6 +173,7 @@ it('blocks deactivating a company with active students', function () {
     ]);
 
     $company = Company::query()->create([
+        'course_id' => $course->id,
         'name' => 'Assigned Company',
         'address' => 'Sample address',
         'is_active' => true,

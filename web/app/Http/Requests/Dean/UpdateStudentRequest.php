@@ -68,7 +68,14 @@ class UpdateStudentRequest extends FormRequest
                         });
                 }),
             ],
-            'company_id' => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true)],
+            'company_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('companies', 'id')->where(function ($query) use ($courseId) {
+                    $query->where('course_id', $courseId)
+                        ->where('is_active', true);
+                }),
+            ],
             'department_id' => [
                 'nullable',
                 'integer',
@@ -108,7 +115,7 @@ class UpdateStudentRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'student_number.regex' => 'Student ID must follow the format YYYY-N-##### (e.g. 2022-1-04311).',
+            'student_number.regex' => 'Student ID must follow the format YYYY-N-##### (e.g. 2022-0-00000).',
             'student_number.unique' => 'This student ID is already registered.',
         ];
     }

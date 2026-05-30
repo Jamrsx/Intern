@@ -861,11 +861,11 @@ export default function DeanStudents({
                                         id="create-student-number"
                                         name="student_number"
                                         required
-                                        placeholder="2022-1-04311"
+                                        placeholder="2022-0-00000"
                                         pattern="\d{4}-\d{1,2}-\d{4,6}"
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Format: YYYY-N-##### (e.g. 2022-1-04311)
+                                        Format: YYYY-N-##### (e.g. 2022-0-00000)
                                     </p>
                                     <InputError message={errors.student_number} />
                                 </div>
@@ -1013,7 +1013,7 @@ export default function DeanStudents({
                                             <tbody>
                                                 <tr>
                                                     <td className="px-3 py-2">
-                                                        2022-1-04311
+                                                        2022-0-00000
                                                     </td>
                                                     <td className="px-3 py-2">
                                                         name@gmail.com
@@ -1329,7 +1329,7 @@ export default function DeanStudents({
                                         name="student_number"
                                         defaultValue={editStudent.student_number}
                                         required
-                                        placeholder="2022-1-04311"
+                                        placeholder="2022-0-00000"
                                         pattern="\d{4}-\d{1,2}-\d{4,6}"
                                     />
                                     <InputError message={errors.student_number} />

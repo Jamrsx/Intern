@@ -10,7 +10,20 @@ class UpdateSupervisorRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('dean') ?? false;
+        if (! ($this->user()?->hasRole('dean') ?? false)) {
+            return false;
+        }
+
+        $courseId = $this->user()?->courseAsDean?->id;
+        $supervisor = $this->route('supervisor');
+
+        if (! $supervisor instanceof Supervisor || $courseId === null) {
+            return false;
+        }
+
+        $supervisor->loadMissing('company');
+
+        return $supervisor->company?->course_id === $courseId;
     }
 
     /**
@@ -20,6 +33,7 @@ class UpdateSupervisorRequest extends FormRequest
     {
         /** @var Supervisor $supervisor */
         $supervisor = $this->route('supervisor');
+        $courseId = $this->user()?->courseAsDean?->id;
 
         return [
             'name' => ['required', 'string', 'max:150'],
@@ -33,7 +47,10 @@ class UpdateSupervisorRequest extends FormRequest
             'company_id' => [
                 'required',
                 'integer',
-                Rule::exists('companies', 'id')->where('is_active', true),
+                Rule::exists('companies', 'id')->where(function ($query) use ($courseId) {
+                    $query->where('course_id', $courseId)
+                        ->where('is_active', true);
+                }),
             ],
             'department_id' => [
                 'nullable',

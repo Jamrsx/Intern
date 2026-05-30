@@ -54,7 +54,7 @@ class StoreStudentRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'student_number.regex' => 'Student ID must follow the format YYYY-N-##### (e.g. 2022-1-04311).',
+            'student_number.regex' => 'Student ID must follow the format YYYY-N-##### (e.g. 2022-0-00000).',
             'student_number.unique' => 'This student ID is already registered.',
         ];
     }

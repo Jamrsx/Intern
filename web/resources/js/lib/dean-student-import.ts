@@ -123,7 +123,7 @@ function validateStudentNumber(studentNumber: string): string | null {
     }
 
     if (!/^\d{4}-\d{1,2}-\d{4,6}$/.test(studentNumber)) {
-        return 'Student ID must follow YYYY-N-##### (e.g. 2022-1-04311).';
+        return 'Student ID must follow YYYY-N-##### (e.g. 2022-0-00000).';
     }
 
     return null;

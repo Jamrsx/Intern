@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Company extends Model
@@ -11,6 +12,7 @@ class Company extends Model
      * @var list<string>
      */
     protected $fillable = [
+        'course_id',
         'name',
         'address',
         'contact_person',
@@ -27,6 +29,14 @@ class Company extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * @return BelongsTo<Course, $this>
+     */
+    public function course(): BelongsTo
+    {
+        return $this->belongsTo(Course::class);
     }
 
     /**

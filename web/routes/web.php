@@ -82,6 +82,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('coordinators.mail-credentials');
             Route::resource('supervisors', DeanSupervisorController::class)
                 ->except(['show', 'create', 'edit']);
+            Route::post('supervisors/{supervisor}/mail-credentials', [DeanSupervisorController::class, 'mailCredentials'])
+                ->name('supervisors.mail-credentials');
         });
 
     Route::middleware('coordinator')

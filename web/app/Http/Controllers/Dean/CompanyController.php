@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dean;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Dean\Concerns\ResolvesDeanCourse;
 use App\Http\Requests\Dean\StoreCompanyRequest;
 use App\Http\Requests\Dean\StoreDepartmentRequest;
 use App\Http\Requests\Dean\UpdateCompanyRequest;
@@ -11,26 +12,36 @@ use App\Models\Company;
 use App\Models\Department;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CompanyController extends Controller
 {
-    public function index(): Response
+    use ResolvesDeanCourse;
+
+    public function index(Request $request): Response
     {
+        $course = $this->deanCourseOrFail($request);
+
         $companies = Company::query()
+            ->where('course_id', $course->id)
             ->with([
                 'departments' => fn ($query) => $query
                     ->withCount([
-                        'students as students_count' => fn ($studentQuery) => $studentQuery->where('is_active', true),
+                        'students as students_count' => fn ($studentQuery) => $studentQuery
+                            ->where('is_active', true)
+                            ->whereHas('section', fn ($sectionQuery) => $sectionQuery->where('course_id', $course->id)),
                     ])
                     ->orderBy('name'),
             ])
             ->withCount([
                 'departments',
                 'supervisors',
-                'students as students_count' => fn ($query) => $query->where('is_active', true),
+                'students as students_count' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->whereHas('section', fn ($sectionQuery) => $sectionQuery->where('course_id', $course->id)),
             ])
             ->orderBy('name')
             ->get()
@@ -62,8 +73,11 @@ class CompanyController extends Controller
 
     public function store(StoreCompanyRequest $request): RedirectResponse
     {
-        DB::transaction(function () use ($request): void {
+        $course = $this->deanCourseOrFail($request);
+
+        DB::transaction(function () use ($request, $course): void {
             $company = Company::query()->create([
+                'course_id' => $course->id,
                 'name' => $request->validated('name'),
                 'address' => $request->validated('address'),
                 'is_active' => true,
@@ -87,6 +101,9 @@ class CompanyController extends Controller
 
     public function update(UpdateCompanyRequest $request, Company $company): RedirectResponse
     {
+        $course = $this->deanCourseOrFail($request);
+        $this->ensureCompanyBelongsToCourse($company, $course);
+
         $company->update([
             'name' => $request->validated('name'),
             'address' => $request->validated('address'),
@@ -101,12 +118,16 @@ class CompanyController extends Controller
         return redirect()->route('deans.companies.index');
     }
 
-    public function destroy(Company $company): RedirectResponse
+    public function destroy(Request $request, Company $company): RedirectResponse
     {
+        $course = $this->deanCourseOrFail($request);
+        $this->ensureCompanyBelongsToCourse($company, $course);
+
         if (
             Student::query()
                 ->where('company_id', $company->id)
                 ->where('is_active', true)
+                ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
                 ->exists()
         ) {
             Inertia::flash('toast', [
@@ -130,8 +151,12 @@ class CompanyController extends Controller
         return redirect()->route('deans.companies.index');
     }
 
-    public function storeDepartment(StoreDepartmentRequest $request, Company $company): RedirectResponse
-    {
+    public function storeDepartment(
+        StoreDepartmentRequest $request,
+        Company $company,
+    ): RedirectResponse {
+        $course = $this->deanCourseOrFail($request);
+        $this->ensureCompanyBelongsToCourse($company, $course);
         abort_unless($company->is_active, 404);
 
         $company->departments()->create([
@@ -152,6 +177,8 @@ class CompanyController extends Controller
         Company $company,
         Department $department,
     ): RedirectResponse {
+        $course = $this->deanCourseOrFail($request);
+        $this->ensureCompanyBelongsToCourse($company, $course);
         abort_unless($department->company_id === $company->id, 404);
 
         $department->update([
@@ -167,14 +194,20 @@ class CompanyController extends Controller
         return redirect()->route('deans.companies.index');
     }
 
-    public function destroyDepartment(Company $company, Department $department): RedirectResponse
-    {
+    public function destroyDepartment(
+        Request $request,
+        Company $company,
+        Department $department,
+    ): RedirectResponse {
+        $course = $this->deanCourseOrFail($request);
+        $this->ensureCompanyBelongsToCourse($company, $course);
         abort_unless($department->company_id === $company->id, 404);
 
         if (
             Student::query()
                 ->where('department_id', $department->id)
                 ->where('is_active', true)
+                ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
                 ->exists()
         ) {
             Inertia::flash('toast', [

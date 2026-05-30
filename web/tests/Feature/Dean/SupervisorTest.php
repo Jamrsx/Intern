@@ -1,14 +1,19 @@
 <?php
 
+use App\Mail\SupervisorAccountCredentialsMail;
 use App\Models\Company;
+use App\Models\Course;
 use App\Models\Department;
 use App\Models\Role;
+use App\Models\SchoolYear;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\Supervisor;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\SchoolYearSeeder;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 
 it('allows a dean to manage supervisors', function () {
     $this->seed(RoleSeeder::class);
@@ -17,7 +22,16 @@ it('allows a dean to manage supervisors', function () {
         'role_id' => Role::query()->where('name', 'dean')->value('id'),
     ]);
 
+    $course = Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => $dean->id,
+        'is_active' => true,
+    ]);
+
     $company = Company::query()->create([
+        'course_id' => $course->id,
         'name' => 'Opol LGU',
         'address' => 'Opol, Misamis Oriental',
         'is_active' => true,
@@ -36,6 +50,7 @@ it('allows a dean to manage supervisors', function () {
             'company_id' => $company->id,
             'department_id' => $department->id,
             'position_title' => 'HR Supervisor',
+            'password' => 'password',
         ])
         ->assertRedirect(route('deans.supervisors.index'));
 
@@ -44,6 +59,7 @@ it('allows a dean to manage supervisors', function () {
         ->first();
 
     expect($supervisor)->not->toBeNull();
+    expect(Hash::check('password', (string) $supervisor?->user?->password))->toBeTrue();
     expect($supervisor?->company_id)->toBe($company->id);
     expect($supervisor?->department_id)->toBe($department->id);
     expect($supervisor?->position_title)->toBe('HR Supervisor');
@@ -79,11 +95,11 @@ it('blocks deactivating a supervisor with active interns', function () {
     $deanRoleId = Role::query()->where('name', 'dean')->value('id');
     $internRoleId = Role::query()->where('name', 'intern')->value('id');
     $supervisorRoleId = Role::query()->where('name', 'supervisor')->value('id');
-    $schoolYear = \App\Models\SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
+    $schoolYear = SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
 
     $dean = User::factory()->create(['role_id' => $deanRoleId]);
 
-    $course = \App\Models\Course::query()->create([
+    $course = Course::query()->create([
         'code' => 'BSIT',
         'name' => 'Bachelor of Science in Information Technology',
         'required_hours' => 486,
@@ -99,6 +115,7 @@ it('blocks deactivating a supervisor with active interns', function () {
     ]);
 
     $company = Company::query()->create([
+        'course_id' => $course->id,
         'name' => 'Assigned Company',
         'is_active' => true,
     ]);
@@ -135,4 +152,55 @@ it('blocks deactivating a supervisor with active interns', function () {
         ->assertRedirect(route('deans.supervisors.index'));
 
     expect($supervisor->fresh()?->is_active)->toBeTrue();
+});
+
+it('allows a dean to email supervisor credentials and reset the password', function () {
+    Mail::fake();
+
+    $this->seed(RoleSeeder::class);
+
+    $dean = User::factory()->create([
+        'role_id' => Role::query()->where('name', 'dean')->value('id'),
+    ]);
+
+    $course = Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => $dean->id,
+        'is_active' => true,
+    ]);
+
+    $company = Company::query()->create([
+        'course_id' => $course->id,
+        'name' => 'Opol LGU',
+        'address' => 'Opol, Misamis Oriental',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($dean)
+        ->post(route('deans.supervisors.store'), [
+            'name' => 'Maria Santos',
+            'email' => 'maria.santos@gmail.com',
+            'company_id' => $company->id,
+            'password' => 'password',
+            'send_credentials_email' => '1',
+        ])
+        ->assertRedirect(route('deans.supervisors.index'));
+
+    $supervisor = Supervisor::query()
+        ->whereHas('user', fn ($query) => $query->where('email', 'maria.santos@gmail.com'))
+        ->firstOrFail();
+
+    Mail::assertSent(SupervisorAccountCredentialsMail::class, fn (SupervisorAccountCredentialsMail $mail) => $mail->hasTo('maria.santos@gmail.com'));
+    expect(Hash::check('password', (string) $supervisor->user->password))->toBeFalse();
+
+    $originalPasswordHash = $supervisor->fresh()?->user?->password;
+
+    $this->actingAs($dean)
+        ->post(route('deans.supervisors.mail-credentials', $supervisor))
+        ->assertRedirect(route('deans.supervisors.index'));
+
+    Mail::assertSent(SupervisorAccountCredentialsMail::class, fn (SupervisorAccountCredentialsMail $mail) => $mail->hasTo('maria.santos@gmail.com'));
+    expect($supervisor->fresh()?->user?->password)->not->toBe($originalPasswordHash);
 });

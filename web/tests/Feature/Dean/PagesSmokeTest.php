@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Course;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -13,6 +14,14 @@ it('renders dean pages', function () {
 
     $user = User::factory()->create([
         'role_id' => $deanRoleId,
+    ]);
+
+    Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => $user->id,
+        'is_active' => true,
     ]);
 
     $this->actingAs($user)

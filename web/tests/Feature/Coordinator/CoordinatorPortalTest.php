@@ -98,9 +98,10 @@ it('allows a coordinator to assign a student to a company', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);
 
-    ['coordinator' => $coordinator, 'student' => $student] = createCoordinatorWithSection();
+    ['coordinator' => $coordinator, 'student' => $student, 'course' => $course] = createCoordinatorWithSection();
 
     $company = Company::query()->create([
+        'course_id' => $course->id,
         'name' => 'Opol LGU',
         'address' => 'Opol, Misamis Oriental',
         'is_active' => true,
@@ -167,6 +168,7 @@ it('blocks coordinators from updating students outside their section', function 
     ]);
 
     $company = Company::query()->create([
+        'course_id' => Course::query()->first()->id,
         'name' => 'Test Company',
         'address' => 'Test Address',
         'is_active' => true,

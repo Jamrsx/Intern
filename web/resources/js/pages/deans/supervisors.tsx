@@ -1,5 +1,5 @@
 import { Form, Head, Link, router } from '@inertiajs/react';
-import { BookOpen, ChevronDown, Pencil, Plus } from 'lucide-react';
+import { BookOpen, ChevronDown, Mail, Pencil, Plus } from 'lucide-react';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
@@ -28,6 +28,7 @@ import { index as deanCompaniesIndex } from '@/routes/deans/companies';
 import {
     destroy,
     index as deanSupervisorsIndex,
+    mailCredentials,
     store,
     update,
 } from '@/routes/deans/supervisors';
@@ -169,6 +170,11 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
     );
     const [createCompanyId, setCreateCompanyId] = useState('');
     const [createDepartmentId, setCreateDepartmentId] = useState('none');
+    const [createPassword, setCreatePassword] = useState('password');
+    const [sendCredentialsEmail, setSendCredentialsEmail] = useState(false);
+    const [mailingSupervisorId, setMailingSupervisorId] = useState<
+        number | null
+    >(null);
     const [editCompanyId, setEditCompanyId] = useState('');
     const [editDepartmentId, setEditDepartmentId] = useState('none');
     const [openGroups, setOpenGroups] = useState<Record<number, boolean>>({});
@@ -267,6 +273,8 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
     const openCreateModal = () => {
         setCreateCompanyId(String(companies[0]?.id ?? ''));
         setCreateDepartmentId('none');
+        setCreatePassword('password');
+        setSendCredentialsEmail(false);
         setCreateOpen(true);
     };
 
@@ -288,6 +296,27 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
         }
 
         router.delete(destroy(supervisor.id).url, { preserveScroll: true });
+    };
+
+    const handleMailCredentials = (supervisor: SupervisorRow) => {
+        if (
+            !confirm(
+                `Email login credentials to ${supervisor.name}? This will reset their password to a new temporary password.`,
+            )
+        ) {
+            return;
+        }
+
+        console.log('Dean mail supervisor credentials', {
+            supervisorId: supervisor.id,
+            email: supervisor.email,
+        });
+
+        setMailingSupervisorId(supervisor.id);
+        router.post(mailCredentials(supervisor.id).url, {}, {
+            preserveScroll: true,
+            onFinish: () => setMailingSupervisorId(null),
+        });
     };
 
     const canManageSupervisors = companies.length > 0;
@@ -459,6 +488,27 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
                                                                         <Button
                                                                             variant="outline"
                                                                             size="sm"
+                                                                            title="Email login credentials"
+                                                                            disabled={
+                                                                                mailingSupervisorId ===
+                                                                                supervisor.id
+                                                                            }
+                                                                            onClick={() =>
+                                                                                handleMailCredentials(
+                                                                                    supervisor,
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            {mailingSupervisorId ===
+                                                                            supervisor.id ? (
+                                                                                <Spinner />
+                                                                            ) : (
+                                                                                <Mail className="size-3.5" />
+                                                                            )}
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="sm"
                                                                             onClick={() =>
                                                                                 openEditModal(
                                                                                     supervisor,
@@ -580,10 +630,72 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
                                     />
                                 </div>
 
-                                <p className="text-xs text-muted-foreground">
-                                    A temporary password will be generated and
-                                    shown after creation.
-                                </p>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-supervisor-password">
+                                        Password
+                                    </Label>
+                                    <Input
+                                        id="create-supervisor-password"
+                                        name="password"
+                                        type="text"
+                                        value={createPassword}
+                                        onChange={(event) =>
+                                            setCreatePassword(event.target.value)
+                                        }
+                                        required={!sendCredentialsEmail}
+                                        disabled={sendCredentialsEmail}
+                                        placeholder="password"
+                                    />
+                                    <InputError message={errors.password} />
+                                    <p className="text-xs text-muted-foreground">
+                                        Use a simple password like{' '}
+                                        <span className="font-medium text-foreground">
+                                            password
+                                        </span>{' '}
+                                        for dummy or test accounts. For real
+                                        supervisors, use email instead.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3">
+                                    <input
+                                        type="hidden"
+                                        name="send_credentials_email"
+                                        value="0"
+                                    />
+                                    <Checkbox
+                                        id="create-send-credentials-email"
+                                        name="send_credentials_email"
+                                        value="1"
+                                        checked={sendCredentialsEmail}
+                                        onCheckedChange={(checked) =>
+                                            setSendCredentialsEmail(
+                                                checked === true,
+                                            )
+                                        }
+                                    />
+                                    <div className="grid gap-1">
+                                        <Label
+                                            htmlFor="create-send-credentials-email"
+                                            className="leading-none"
+                                        >
+                                            Email login credentials
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Generates a new temporary password
+                                            and emails it to the supervisor.
+                                            The manual password above will be
+                                            ignored.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {!sendCredentialsEmail && (
+                                    <p className="text-xs text-muted-foreground">
+                                        The password you enter will be shown in
+                                        a toast after creation.
+                                    </p>
+                                )}
 
                                 <div className="flex justify-end gap-2 pt-2">
                                     <Button

@@ -10,7 +10,18 @@ class StoreDepartmentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('dean') ?? false;
+        if (! ($this->user()?->hasRole('dean') ?? false)) {
+            return false;
+        }
+
+        $courseId = $this->user()?->courseAsDean?->id;
+        $company = $this->route('company');
+
+        if (! $company instanceof Company || $courseId === null) {
+            return false;
+        }
+
+        return $company->course_id === $courseId;
     }
 
     /**

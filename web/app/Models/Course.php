@@ -44,4 +44,12 @@ class Course extends Model
     {
         return $this->hasMany(Section::class);
     }
+
+    /**
+     * @return HasMany<Company, $this>
+     */
+    public function companies(): HasMany
+    {
+        return $this->hasMany(Company::class);
+    }
 }

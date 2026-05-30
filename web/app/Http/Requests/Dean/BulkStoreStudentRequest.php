@@ -74,7 +74,7 @@ class BulkStoreStudentRequest extends FormRequest
             'students.*.email.unique' => 'One or more emails are already registered.',
             'students.*.student_number.distinct' => 'Duplicate student IDs are not allowed in the same bulk upload.',
             'students.*.student_number.unique' => 'One or more student IDs are already registered.',
-            'students.*.student_number.regex' => 'Student IDs must follow the format YYYY-N-##### (e.g. 2022-1-04311).',
+            'students.*.student_number.regex' => 'Student IDs must follow the format YYYY-N-##### (e.g. 2022-0-00000).',
         ];
     }
 }
