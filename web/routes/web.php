@@ -1,7 +1,8 @@
 <?php
 
-use App\Http\Controllers\Dean\DashboardController as DeanDashboardController;
 use App\Http\Controllers\Dean\CompanyController as DeanCompanyController;
+use App\Http\Controllers\Dean\DashboardController as DeanDashboardController;
+use App\Http\Controllers\Dean\SchoolYearController as DeanSchoolYearController;
 use App\Http\Controllers\Dean\SectionController as DeanSectionController;
 use App\Http\Controllers\Dean\StudentController as DeanStudentController;
 use App\Http\Controllers\Dean\SupervisorController as DeanSupervisorController;
@@ -44,6 +45,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function () {
             Route::get('dashboard', [DeanDashboardController::class, 'index'])
                 ->name('dashboard');
+
+            Route::resource('school-years', DeanSchoolYearController::class)
+                ->except(['show', 'create', 'edit']);
+
+            Route::patch('school-years/{school_year}/activate', [DeanSchoolYearController::class, 'activate'])
+                ->name('school-years.activate');
 
             Route::get('students', [DeanStudentController::class, 'index'])->name('students.index');
             Route::get('companies', [DeanCompanyController::class, 'index'])->name('companies.index');

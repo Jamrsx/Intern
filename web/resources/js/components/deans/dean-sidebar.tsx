@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, Building2, LayoutGrid, ListChecks, Users } from 'lucide-react';
+import { BookOpen, Building2, CalendarDays, LayoutGrid, ListChecks, Users } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes/deans';
 import { index as deanCompaniesIndex } from '@/routes/deans/companies';
+import { index as deanSchoolYearsIndex } from '@/routes/deans/school-years';
 import { index as deanSectionsIndex } from '@/routes/deans/sections';
 import { index as deanStudentsIndex } from '@/routes/deans/students';
 import { index as deanSupervisorsIndex } from '@/routes/deans/supervisors';
@@ -25,6 +26,16 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
+        title: 'School Years',
+        href: deanSchoolYearsIndex(),
+        icon: CalendarDays,
+    },
+    {
+        title: 'Sections',
+        href: deanSectionsIndex(),
+        icon: ListChecks,
+    },
+    {
         title: 'Students',
         href: deanStudentsIndex(),
         icon: Users,
@@ -33,11 +44,6 @@ const mainNavItems: NavItem[] = [
         title: 'Companies',
         href: deanCompaniesIndex(),
         icon: Building2,
-    },
-    {
-        title: 'Sections',
-        href: deanSectionsIndex(),
-        icon: ListChecks,
     },
     {
         title: 'Supervisors',

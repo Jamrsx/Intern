@@ -16,6 +16,9 @@ return new class extends Migration
             $table->foreignId('course_id')
                 ->constrained('courses')
                 ->cascadeOnDelete();
+            $table->foreignId('school_year_id')
+                ->constrained('school_years')
+                ->restrictOnDelete();
             $table->string('name');
             $table->string('code')->nullable();
             $table->foreignId('coordinator_user_id')
@@ -25,7 +28,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->unique(['course_id', 'name']);
+            $table->unique(['course_id', 'school_year_id', 'name']);
         });
     }
 

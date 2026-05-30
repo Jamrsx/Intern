@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\User;
 use App\Models\Role;
+use App\Models\User;
 use Database\Seeders\RoleSeeder;
 
 it('renders dean pages', function () {
@@ -17,6 +17,10 @@ it('renders dean pages', function () {
 
     $this->actingAs($user)
         ->get(route('deans.dashboard'))
+        ->assertOk();
+
+    $this->actingAs($user)
+        ->get(route('deans.school-years.index'))
         ->assertOk();
 
     $this->actingAs($user)
