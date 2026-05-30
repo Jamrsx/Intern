@@ -12,6 +12,7 @@ import { logout } from '@/routes';
 import { edit } from '@/routes/profile';
 import { edit as editSuperAdminProfile } from '@/routes/superadmin/profile';
 import { edit as editDeanProfile } from '@/routes/deans/settings/profile';
+import { edit as editCoordinatorProfile } from '@/routes/coordinators/settings/profile';
 import type { User } from '@/types';
 
 type Props = {
@@ -26,7 +27,9 @@ export function UserMenuContent({ user }: Props) {
             ? editSuperAdminProfile()
             : user.role?.name === 'dean'
                 ? editDeanProfile()
-                : edit();
+                : user.role?.name === 'coordinator'
+                    ? editCoordinatorProfile()
+                    : edit();
 
     const handleLogout = () => {
         cleanup();

@@ -22,6 +22,7 @@ class ProfileController extends Controller
         $component = match (true) {
             $request->is('superadmin/settings/*') => 'superAdmin/settings/profile',
             $request->is('deans/settings/*') => 'deans/settings/profile',
+            $request->is('coordinators/settings/*') => 'coordinator/settings/profile',
             default => 'settings/profile',
         };
 
@@ -54,6 +55,10 @@ class ProfileController extends Controller
 
         if ($user?->hasRole('dean')) {
             return to_route('deans.settings.profile.edit');
+        }
+
+        if ($user?->hasRole('coordinator')) {
+            return to_route('coordinators.settings.profile.edit');
         }
 
         return to_route('profile.edit');

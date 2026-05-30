@@ -24,6 +24,7 @@ class SecurityController extends Controller
         $component = match (true) {
             $request->is('superadmin/settings/*') => 'superAdmin/settings/security',
             $request->is('deans/settings/*') => 'deans/settings/security',
+            $request->is('coordinators/settings/*') => 'coordinator/settings/security',
             default => 'settings/security',
         };
 

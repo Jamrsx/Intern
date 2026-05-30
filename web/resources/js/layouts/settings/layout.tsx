@@ -16,6 +16,9 @@ import { edit as editSuperAdminSecurity } from '@/routes/superadmin/security';
 import { edit as editDeanAppearance } from '@/routes/deans/settings/appearance';
 import { edit as editDeanProfile } from '@/routes/deans/settings/profile';
 import { edit as editDeanSecurity } from '@/routes/deans/settings/security';
+import { edit as editCoordinatorAppearance } from '@/routes/coordinators/settings/appearance';
+import { edit as editCoordinatorProfile } from '@/routes/coordinators/settings/profile';
+import { edit as editCoordinatorSecurity } from '@/routes/coordinators/settings/security';
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
@@ -23,6 +26,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
 
     const isSuperAdmin = auth.user?.role?.name === 'super_admin';
     const isDean = auth.user?.role?.name === 'dean';
+    const isCoordinator = auth.user?.role?.name === 'coordinator';
 
     const sidebarNavItems: NavItem[] = [
         {
@@ -31,7 +35,9 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                 ? editSuperAdminProfile()
                 : isDean
                     ? editDeanProfile()
-                    : edit(),
+                    : isCoordinator
+                        ? editCoordinatorProfile()
+                        : edit(),
             icon: null,
         },
         {
@@ -40,7 +46,9 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                 ? editSuperAdminSecurity()
                 : isDean
                     ? editDeanSecurity()
-                    : editSecurity(),
+                    : isCoordinator
+                        ? editCoordinatorSecurity()
+                        : editSecurity(),
             icon: null,
         },
         {
@@ -49,7 +57,9 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                 ? editSuperAdminAppearance()
                 : isDean
                     ? editDeanAppearance()
-                    : editAppearance(),
+                    : isCoordinator
+                        ? editCoordinatorAppearance()
+                        : editAppearance(),
             icon: null,
         },
     ];

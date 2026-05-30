@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureUserHasRole;
+use App\Http\Middleware\EnsureUserIsCoordinator;
 use App\Http\Middleware\EnsureUserIsDean;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -29,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
             'dean' => EnsureUserIsDean::class,
+            'coordinator' => EnsureUserIsCoordinator::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

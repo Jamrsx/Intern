@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\StudentController as CoordinatorStudentController;
 use App\Http\Controllers\Dean\CompanyController as DeanCompanyController;
 use App\Http\Controllers\Dean\CoordinatorController as DeanCoordinatorController;
 use App\Http\Controllers\Dean\DashboardController as DeanDashboardController;
@@ -21,6 +23,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         }
         if (auth()->user()?->loadMissing('role')->hasRole('dean')) {
             return redirect()->route('deans.dashboard');
+        }
+        if (auth()->user()?->loadMissing('role')->hasRole('coordinator')) {
+            return redirect()->route('coordinators.dashboard');
         }
 
         return inertia('dashboard');
@@ -77,6 +82,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('coordinators.mail-credentials');
             Route::resource('supervisors', DeanSupervisorController::class)
                 ->except(['show', 'create', 'edit']);
+        });
+
+    Route::middleware('coordinator')
+        ->prefix('coordinators')
+        ->name('coordinators.')
+        ->group(function () {
+            Route::get('dashboard', [CoordinatorDashboardController::class, 'index'])
+                ->name('dashboard');
+
+            Route::resource('students', CoordinatorStudentController::class)
+                ->only(['index', 'show', 'update']);
+
+            Route::get('students/{student}/documents/{document}', [CoordinatorStudentController::class, 'showDocument'])
+                ->name('students.documents.show');
         });
 });
 

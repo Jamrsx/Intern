@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Student extends Model
 {
@@ -76,5 +78,29 @@ class Student extends Model
     public function supervisor(): BelongsTo
     {
         return $this->belongsTo(Supervisor::class);
+    }
+
+    /**
+     * @return HasMany<TimeLog, $this>
+     */
+    public function timeLogs(): HasMany
+    {
+        return $this->hasMany(TimeLog::class);
+    }
+
+    /**
+     * @return HasMany<StudentDocument, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(StudentDocument::class);
+    }
+
+    /**
+     * @return HasOne<OjtSchedule, $this>
+     */
+    public function ojtSchedule(): HasOne
+    {
+        return $this->hasOne(OjtSchedule::class);
     }
 }
