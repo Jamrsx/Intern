@@ -53,4 +53,12 @@ class Section extends Model
     {
         return $this->hasMany(Student::class);
     }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function coordinator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'coordinator_user_id');
+    }
 }

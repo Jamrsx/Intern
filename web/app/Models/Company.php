@@ -38,6 +38,14 @@ class Company extends Model
     }
 
     /**
+     * @return HasMany<Student, $this>
+     */
+    public function students(): HasMany
+    {
+        return $this->hasMany(Student::class);
+    }
+
+    /**
      * @return HasMany<Supervisor, $this>
      */
     public function supervisors(): HasMany

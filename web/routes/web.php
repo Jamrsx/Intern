@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Dean\CompanyController as DeanCompanyController;
+use App\Http\Controllers\Dean\CoordinatorController as DeanCoordinatorController;
 use App\Http\Controllers\Dean\DashboardController as DeanDashboardController;
 use App\Http\Controllers\Dean\SchoolYearController as DeanSchoolYearController;
 use App\Http\Controllers\Dean\SectionController as DeanSectionController;
@@ -60,10 +61,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('students.mail-credentials');
             Route::resource('students', DeanStudentController::class)
                 ->except(['show', 'create', 'edit']);
-            Route::get('companies', [DeanCompanyController::class, 'index'])->name('companies.index');
+            Route::resource('companies', DeanCompanyController::class)
+                ->except(['show', 'create', 'edit']);
+            Route::post('companies/{company}/departments', [DeanCompanyController::class, 'storeDepartment'])
+                ->name('companies.departments.store');
+            Route::patch('companies/{company}/departments/{department}', [DeanCompanyController::class, 'updateDepartment'])
+                ->name('companies.departments.update');
+            Route::delete('companies/{company}/departments/{department}', [DeanCompanyController::class, 'destroyDepartment'])
+                ->name('companies.departments.destroy');
             Route::resource('sections', DeanSectionController::class)
                 ->except(['show', 'create', 'edit']);
-            Route::get('supervisors', [DeanSupervisorController::class, 'index'])->name('supervisors.index');
+            Route::resource('coordinators', DeanCoordinatorController::class)
+                ->except(['show', 'create', 'edit']);
+            Route::post('coordinators/{coordinator}/mail-credentials', [DeanCoordinatorController::class, 'mailCredentials'])
+                ->name('coordinators.mail-credentials');
+            Route::resource('supervisors', DeanSupervisorController::class)
+                ->except(['show', 'create', 'edit']);
         });
 });
 

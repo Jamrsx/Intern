@@ -36,6 +36,10 @@ it('renders dean pages', function () {
         ->assertOk();
 
     $this->actingAs($user)
+        ->get(route('deans.coordinators.index'))
+        ->assertOk();
+
+    $this->actingAs($user)
         ->get(route('deans.supervisors.index'))
         ->assertOk();
 });

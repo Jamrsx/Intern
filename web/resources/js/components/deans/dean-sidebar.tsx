@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, Building2, CalendarDays, LayoutGrid, ListChecks, Users } from 'lucide-react';
+import { BookOpen, Building2, CalendarDays, LayoutGrid, ListChecks, UserCog, Users } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -12,6 +12,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes/deans';
+import { index as deanCoordinatorsIndex } from '@/routes/deans/coordinators';
 import { index as deanCompaniesIndex } from '@/routes/deans/companies';
 import { index as deanSchoolYearsIndex } from '@/routes/deans/school-years';
 import { index as deanSectionsIndex } from '@/routes/deans/sections';
@@ -34,6 +35,11 @@ const mainNavItems: NavItem[] = [
         title: 'Sections',
         href: deanSectionsIndex(),
         icon: ListChecks,
+    },
+    {
+        title: 'Coordinators',
+        href: deanCoordinatorsIndex(),
+        icon: UserCog,
     },
     {
         title: 'Students',
