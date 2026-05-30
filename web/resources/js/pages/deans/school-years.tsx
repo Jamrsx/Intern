@@ -29,7 +29,14 @@ type SchoolYear = {
     created_at: string | null;
 };
 
+type Course = {
+    id: number;
+    code: string;
+    name: string;
+};
+
 type Props = {
+    course: Course | null;
     schoolYears: SchoolYear[];
 };
 
@@ -45,14 +52,17 @@ function formatDateRange(start: string | null, end: string | null): string {
     return start ?? end ?? '—';
 }
 
-export default function DeanSchoolYears({ schoolYears }: Props) {
+export default function DeanSchoolYears({ course, schoolYears }: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editSchoolYear, setEditSchoolYear] = useState<SchoolYear | null>(
         null,
     );
     const storeRoute = store();
 
-    console.log('Dean School Years page loaded', { count: schoolYears.length });
+    console.log('Dean School Years page loaded', {
+        course,
+        count: schoolYears.length,
+    });
 
     const handleDeactivate = (schoolYear: SchoolYear) => {
         if (
@@ -111,7 +121,9 @@ export default function DeanSchoolYears({ schoolYears }: Props) {
                                             Date range
                                         </th>
                                         <th className="px-4 py-3 font-medium">
-                                            Sections
+                                            {course
+                                                ? `${course.code} sections`
+                                                : 'Sections'}
                                         </th>
                                         <th className="px-4 py-3 font-medium">
                                             Status
