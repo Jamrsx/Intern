@@ -1,6 +1,6 @@
-import { Form, Head, router } from '@inertiajs/react';
-import { Building2, ChevronDown, Pencil, Plus } from 'lucide-react';
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { Form, Head, Link, router } from '@inertiajs/react';
+import { Archive, Building2, ChevronDown, Pencil, Plus } from 'lucide-react';
+import { useLayoutEffect, useState } from 'react';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { PageHeader } from '@/components/superadmin/page-header';
@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import {
+    deactivated as deactivatedCompaniesIndex,
     destroy as destroyCompany,
     index as deanCompaniesIndex,
     store,
@@ -52,6 +53,7 @@ type CompanyRow = {
 
 type Props = {
     companies: CompanyRow[];
+    deactivated_count: number;
 };
 
 type DepartmentDraft = {
@@ -92,7 +94,10 @@ function persistCompanyGroupState(state: Record<number, boolean>): void {
 
 const emptyDepartmentDraft = (): DepartmentDraft => ({ name: '' });
 
-export default function DeanCompanies({ companies }: Props) {
+export default function DeanCompanies({
+    companies,
+    deactivated_count,
+}: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editCompany, setEditCompany] = useState<CompanyRow | null>(null);
     const [addDepartmentCompany, setAddDepartmentCompany] =
@@ -118,12 +123,8 @@ export default function DeanCompanies({ companies }: Props) {
 
     console.log('Dean Companies page loaded', {
         count: companies.length,
+        deactivated_count,
     });
-
-    const activeCompanies = useMemo(
-        () => companies.filter((company) => company.is_active),
-        [companies],
-    );
 
     const isGroupOpen = (companyId: number) => {
         if (!hasLoadedGroupState) {
@@ -211,20 +212,36 @@ export default function DeanCompanies({ companies }: Props) {
                     icon={Building2}
                     badgeText="Dean"
                     action={
-                        <Button
-                            onClick={() => {
-                                resetCreateForm();
-                                setCreateOpen(true);
-                            }}
-                            className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                        >
-                            <Plus className="mr-2 size-4" />
-                            Add Company
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" asChild>
+                                <Link href={deactivatedCompaniesIndex().url}>
+                                    <Archive className="mr-2 size-4" />
+                                    Deactivated
+                                    {deactivated_count > 0 && (
+                                        <Badge
+                                            variant="secondary"
+                                            className="ml-2"
+                                        >
+                                            {deactivated_count}
+                                        </Badge>
+                                    )}
+                                </Link>
+                            </Button>
+                            <Button
+                                onClick={() => {
+                                    resetCreateForm();
+                                    setCreateOpen(true);
+                                }}
+                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                            >
+                                <Plus className="mr-2 size-4" />
+                                Add Company
+                            </Button>
+                        </div>
                     }
                 />
 
-                {activeCompanies.length === 0 ? (
+                {companies.length === 0 ? (
                     <Card className="border-sidebar-border/70">
                         <CardContent className="py-10 text-center text-sm text-muted-foreground">
                             No companies yet. Click{' '}
@@ -243,7 +260,7 @@ export default function DeanCompanies({ companies }: Props) {
                             later.
                         </p>
 
-                        {activeCompanies.map((company) => (
+                        {companies.map((company) => (
                             <Collapsible
                                 key={company.id}
                                 open={isGroupOpen(company.id)}

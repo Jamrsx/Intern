@@ -66,6 +66,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('students.mail-credentials');
             Route::resource('students', DeanStudentController::class)
                 ->except(['show', 'create', 'edit']);
+            Route::get('companies/deactivated', [DeanCompanyController::class, 'deactivated'])
+                ->name('companies.deactivated');
+            Route::patch('companies/{company}/reactivate', [DeanCompanyController::class, 'reactivate'])
+                ->name('companies.reactivate');
             Route::resource('companies', DeanCompanyController::class)
                 ->except(['show', 'create', 'edit']);
             Route::post('companies/{company}/departments', [DeanCompanyController::class, 'storeDepartment'])

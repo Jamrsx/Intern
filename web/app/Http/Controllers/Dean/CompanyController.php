@@ -9,6 +9,7 @@ use App\Http\Requests\Dean\StoreDepartmentRequest;
 use App\Http\Requests\Dean\UpdateCompanyRequest;
 use App\Http\Requests\Dean\UpdateDepartmentRequest;
 use App\Models\Company;
+use App\Models\Course;
 use App\Models\Department;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
@@ -25,49 +26,23 @@ class CompanyController extends Controller
     {
         $course = $this->deanCourseOrFail($request);
 
-        $companies = Company::query()
+        $deactivatedCount = Company::query()
             ->where('course_id', $course->id)
-            ->with([
-                'departments' => fn ($query) => $query
-                    ->withCount([
-                        'students as students_count' => fn ($studentQuery) => $studentQuery
-                            ->where('is_active', true)
-                            ->whereHas('section', fn ($sectionQuery) => $sectionQuery->where('course_id', $course->id)),
-                    ])
-                    ->orderBy('name'),
-            ])
-            ->withCount([
-                'departments',
-                'supervisors',
-                'students as students_count' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->whereHas('section', fn ($sectionQuery) => $sectionQuery->where('course_id', $course->id)),
-            ])
-            ->orderBy('name')
-            ->get()
-            ->map(fn (Company $company) => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'address' => $company->address,
-                'contact_person' => $company->contact_person,
-                'contact_email' => $company->contact_email,
-                'contact_phone' => $company->contact_phone,
-                'is_active' => $company->is_active,
-                'departments_count' => $company->departments_count,
-                'supervisors_count' => $company->supervisors_count,
-                'students_count' => $company->students_count,
-                'departments' => $company->departments->map(fn (Department $department) => [
-                    'id' => $department->id,
-                    'name' => $department->name,
-                    'is_active' => $department->is_active,
-                    'students_count' => $department->students_count,
-                ])->values()->all(),
-            ])
-            ->values()
-            ->all();
+            ->where('is_active', false)
+            ->count();
 
         return Inertia::render('deans/companies', [
-            'companies' => $companies,
+            'companies' => $this->companyList($course, activeOnly: true),
+            'deactivated_count' => $deactivatedCount,
+        ]);
+    }
+
+    public function deactivated(Request $request): Response
+    {
+        $course = $this->deanCourseOrFail($request);
+
+        return Inertia::render('deans/companies/deactivated', [
+            'companies' => $this->companyList($course, activeOnly: false),
         ]);
     }
 
@@ -151,6 +126,25 @@ class CompanyController extends Controller
         return redirect()->route('deans.companies.index');
     }
 
+    public function reactivate(Request $request, Company $company): RedirectResponse
+    {
+        $course = $this->deanCourseOrFail($request);
+        $this->ensureCompanyBelongsToCourse($company, $course);
+        abort_unless(! $company->is_active, 422, 'This company is already active.');
+
+        DB::transaction(function () use ($company): void {
+            $company->update(['is_active' => true]);
+            $company->departments()->update(['is_active' => true]);
+        });
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "{$company->name} has been reactivated.",
+        ]);
+
+        return redirect()->route('deans.companies.deactivated');
+    }
+
     public function storeDepartment(
         StoreDepartmentRequest $request,
         Company $company,
@@ -226,5 +220,53 @@ class CompanyController extends Controller
         ]);
 
         return redirect()->route('deans.companies.index');
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function companyList(Course $course, bool $activeOnly): array
+    {
+        return Company::query()
+            ->where('course_id', $course->id)
+            ->where('is_active', $activeOnly)
+            ->with([
+                'departments' => fn ($query) => $query
+                    ->withCount([
+                        'students as students_count' => fn ($studentQuery) => $studentQuery
+                            ->where('is_active', true)
+                            ->whereHas('section', fn ($sectionQuery) => $sectionQuery->where('course_id', $course->id)),
+                    ])
+                    ->orderBy('name'),
+            ])
+            ->withCount([
+                'departments',
+                'supervisors',
+                'students as students_count' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->whereHas('section', fn ($sectionQuery) => $sectionQuery->where('course_id', $course->id)),
+            ])
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Company $company) => [
+                'id' => $company->id,
+                'name' => $company->name,
+                'address' => $company->address,
+                'contact_person' => $company->contact_person,
+                'contact_email' => $company->contact_email,
+                'contact_phone' => $company->contact_phone,
+                'is_active' => $company->is_active,
+                'departments_count' => $company->departments_count,
+                'supervisors_count' => $company->supervisors_count,
+                'students_count' => $company->students_count,
+                'departments' => $company->departments->map(fn (Department $department) => [
+                    'id' => $department->id,
+                    'name' => $department->name,
+                    'is_active' => $department->is_active,
+                    'students_count' => $department->students_count,
+                ])->values()->all(),
+            ])
+            ->values()
+            ->all();
     }
 }

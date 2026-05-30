@@ -145,6 +145,49 @@ it('scopes companies to the logged-in dean course', function () {
         ->assertForbidden();
 });
 
+it('allows a dean to view and reactivate deactivated companies', function () {
+    $this->seed(RoleSeeder::class);
+
+    $dean = User::factory()->create([
+        'role_id' => Role::query()->where('name', 'dean')->value('id'),
+    ]);
+
+    $course = Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => $dean->id,
+        'is_active' => true,
+    ]);
+
+    $company = Company::query()->create([
+        'course_id' => $course->id,
+        'name' => 'Inactive Partner',
+        'address' => 'Sample address',
+        'is_active' => false,
+    ]);
+
+    $department = $company->departments()->create([
+        'name' => 'Operations',
+        'is_active' => false,
+    ]);
+
+    $this->actingAs($dean)
+        ->get(route('deans.companies.deactivated'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('deans/companies/deactivated')
+            ->has('companies', 1)
+            ->where('companies.0.name', 'Inactive Partner'));
+
+    $this->actingAs($dean)
+        ->patch(route('deans.companies.reactivate', $company))
+        ->assertRedirect(route('deans.companies.deactivated'));
+
+    expect($company->fresh()?->is_active)->toBeTrue();
+    expect($department->fresh()?->is_active)->toBeTrue();
+});
+
 it('blocks deactivating a company with active students', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);
