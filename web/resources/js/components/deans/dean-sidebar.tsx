@@ -1,6 +1,15 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, Building2, CalendarDays, LayoutGrid, ListChecks, UserCog, Users } from 'lucide-react';
-import { NavMain } from '@/components/nav-main';
+import {
+    BookOpen,
+    Building2,
+    Briefcase,
+    CalendarDays,
+    LayoutGrid,
+    ListChecks,
+    UserCog,
+    Users,
+} from 'lucide-react';
+import { NavGrouped } from '@/components/nav-grouped';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -18,47 +27,71 @@ import { index as deanSchoolYearsIndex } from '@/routes/deans/school-years';
 import { index as deanSectionsIndex } from '@/routes/deans/sections';
 import { index as deanStudentsIndex } from '@/routes/deans/students';
 import { index as deanSupervisorsIndex } from '@/routes/deans/supervisors';
-import type { NavItem } from '@/types';
+import type { NavGroup } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const navGroups: NavGroup[] = [
     {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
+        label: 'Overview',
+        items: [
+            {
+                title: 'Dashboard',
+                href: dashboard(),
+                icon: LayoutGrid,
+            },
+        ],
     },
     {
-        title: 'School Years',
-        href: deanSchoolYearsIndex(),
-        icon: CalendarDays,
+        label: 'Academic Setup',
+        items: [
+            {
+                title: 'School Years',
+                href: deanSchoolYearsIndex(),
+                icon: CalendarDays,
+            },
+            {
+                title: 'Sections',
+                href: deanSectionsIndex(),
+                icon: ListChecks,
+            },
+        ],
     },
     {
-        title: 'Sections',
-        href: deanSectionsIndex(),
-        icon: ListChecks,
+        label: 'People',
+        items: [
+            {
+                title: 'Students',
+                href: deanStudentsIndex(),
+                icon: Users,
+            },
+            {
+                title: 'Coordinators',
+                href: deanCoordinatorsIndex(),
+                icon: UserCog,
+            },
+        ],
     },
     {
-        title: 'Coordinators',
-        href: deanCoordinatorsIndex(),
-        icon: UserCog,
-    },
-    {
-        title: 'Students',
-        href: deanStudentsIndex(),
-        icon: Users,
-    },
-    {
-        title: 'Companies',
-        href: deanCompaniesIndex(),
-        icon: Building2,
-    },
-    {
-        title: 'Supervisors',
-        href: deanSupervisorsIndex(),
-        icon: BookOpen,
+        label: 'OJT Partners',
+        items: [
+            {
+                title: 'Companies',
+                href: deanCompaniesIndex(),
+                icon: Building2,
+            },
+            {
+                title: 'Supervisors',
+                href: deanSupervisorsIndex(),
+                icon: Briefcase,
+            },
+        ],
     },
 ];
 
 export function DeanSidebar() {
+    console.log('Dean sidebar nav groups loaded', {
+        groups: navGroups.map((group) => group.label),
+    });
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -84,7 +117,7 @@ export function DeanSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavGrouped groups={navGroups} />
             </SidebarContent>
 
             <SidebarFooter>
@@ -93,4 +126,3 @@ export function DeanSidebar() {
         </Sidebar>
     );
 }
-
