@@ -1,5 +1,5 @@
 import { Form, Head, Link, router } from '@inertiajs/react';
-import { ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Search, Upload, Users } from 'lucide-react';
+import { ChevronDown, Download, FileSpreadsheet, Mail, Pencil, Plus, Search, Upload, Users } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
@@ -29,7 +29,7 @@ import {
     parseStudentImportFile,
     type BulkImportRow,
 } from '@/lib/dean-student-import';
-import { bulkStore, destroy, index as studentsIndex, store, update } from '@/routes/deans/students';
+import { bulkStore, destroy, index as studentsIndex, mailAllCredentials, mailCredentials, store, update } from '@/routes/deans/students';
 import { index as sectionsIndex } from '@/routes/deans/sections';
 
 type Course = {
@@ -134,10 +134,14 @@ function StudentGroupTable({
     students,
     onEdit,
     onDeactivate,
+    onMail,
+    mailingStudentId,
 }: {
     students: StudentRow[];
     onEdit: (student: StudentRow) => void;
     onDeactivate: (student: StudentRow) => void;
+    onMail: (student: StudentRow) => void;
+    mailingStudentId: number | null;
 }) {
     return (
         <div className="overflow-x-auto">
@@ -203,6 +207,23 @@ function StudentGroupTable({
                             </td>
                             <td className="px-4 py-3">
                                 <div className="flex justify-end gap-2">
+                                    {student.is_active && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            title="Email login credentials"
+                                            disabled={
+                                                mailingStudentId === student.id
+                                            }
+                                            onClick={() => onMail(student)}
+                                        >
+                                            {mailingStudentId === student.id ? (
+                                                <Spinner className="size-3.5" />
+                                            ) : (
+                                                <Mail className="size-3.5" />
+                                            )}
+                                        </Button>
+                                    )}
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -306,6 +327,8 @@ export default function DeanStudents({
     const [bulkImportError, setBulkImportError] = useState<string | null>(null);
     const [bulkImportFileName, setBulkImportFileName] = useState('');
     const bulkImportInputRef = useRef<HTMLInputElement>(null);
+    const [mailingStudentId, setMailingStudentId] = useState<number | null>(null);
+    const [mailingAll, setMailingAll] = useState(false);
     const [filterSectionId, setFilterSectionId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [openGroups, setOpenGroups] = useState<Record<number, boolean>>({});
@@ -519,6 +542,56 @@ export default function DeanStudents({
     };
 
     const canManageStudents = course !== null && sections.length > 0;
+    const activeStudentsCount = useMemo(
+        () => students.filter((student) => student.is_active).length,
+        [students],
+    );
+    const mailAllRoute = mailAllCredentials();
+
+    const handleMailStudent = (student: StudentRow) => {
+        if (
+            !confirm(
+                `Send login credentials to ${student.full_name}? This will reset their password.`,
+            )
+        ) {
+            return;
+        }
+
+        console.log('Dean mail student credentials', {
+            studentId: student.id,
+            email: student.email,
+        });
+
+        setMailingStudentId(student.id);
+        router.post(mailCredentials(student.id).url, {}, {
+            preserveScroll: true,
+            onFinish: () => setMailingStudentId(null),
+        });
+    };
+
+    const handleMailAllStudents = () => {
+        if (activeStudentsCount === 0) {
+            return;
+        }
+
+        if (
+            !confirm(
+                `Send login credentials to all ${activeStudentsCount} active student(s)? This will reset each student's password.`,
+            )
+        ) {
+            return;
+        }
+
+        console.log('Dean mail all student credentials', {
+            count: activeStudentsCount,
+        });
+
+        setMailingAll(true);
+        router.post(mailAllRoute.url, {}, {
+            preserveScroll: true,
+            onFinish: () => setMailingAll(false),
+        });
+    };
 
     return (
         <>
@@ -537,6 +610,23 @@ export default function DeanStudents({
                     action={
                         canManageStudents ? (
                             <div className="flex flex-wrap gap-2">
+                                {students.length > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        disabled={
+                                            mailingAll ||
+                                            activeStudentsCount === 0
+                                        }
+                                        onClick={handleMailAllStudents}
+                                    >
+                                        {mailingAll ? (
+                                            <Spinner className="mr-2 size-4" />
+                                        ) : (
+                                            <Mail className="mr-2 size-4" />
+                                        )}
+                                        Mail All
+                                    </Button>
+                                )}
                                 <Button
                                     variant="outline"
                                     onClick={openBulkImportModal}
@@ -732,6 +822,10 @@ export default function DeanStudents({
                                                     onEdit={openEditModal}
                                                     onDeactivate={
                                                         handleDeactivate
+                                                    }
+                                                    onMail={handleMailStudent}
+                                                    mailingStudentId={
+                                                        mailingStudentId
                                                     }
                                                 />
                                             </div>

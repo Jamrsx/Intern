@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Dean\BulkStoreStudentRequest;
 use App\Http\Requests\Dean\StoreStudentRequest;
 use App\Http\Requests\Dean\UpdateStudentRequest;
+use App\Mail\StudentAccountCredentialsMail;
 use App\Models\Company;
 use App\Models\Course;
 use App\Models\Role;
@@ -16,6 +17,7 @@ use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -134,6 +136,91 @@ class StudentController extends Controller
         return redirect()->route('deans.students.index');
     }
 
+    public function mailCredentials(Request $request, Student $student): RedirectResponse
+    {
+        $course = $this->deanCourseOrFail($request);
+        abort_unless($student->section?->course_id === $course->id, 404);
+        abort_unless($student->is_active && $student->user->is_active, 422);
+
+        try {
+            $this->sendStudentCredentials($student);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => "Could not send credentials to {$student->fullName()}.",
+            ]);
+
+            return redirect()->route('deans.students.index');
+        }
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "Login credentials sent to {$student->fullName()}.",
+        ]);
+
+        return redirect()->route('deans.students.index');
+    }
+
+    public function mailAllCredentials(Request $request): RedirectResponse
+    {
+        $course = $this->deanCourseOrFail($request);
+
+        $students = Student::query()
+            ->with('user')
+            ->where('is_active', true)
+            ->whereHas('user', fn ($query) => $query->where('is_active', true))
+            ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get();
+
+        if ($students->isEmpty()) {
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => 'No active students found to email.',
+            ]);
+
+            return redirect()->route('deans.students.index');
+        }
+
+        $sentCount = 0;
+        $failedCount = 0;
+
+        foreach ($students as $student) {
+            try {
+                $this->sendStudentCredentials($student);
+                $sentCount++;
+            } catch (\Throwable $exception) {
+                report($exception);
+                $failedCount++;
+            }
+        }
+
+        if ($sentCount === 0) {
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => 'Could not send credentials to any students.',
+            ]);
+
+            return redirect()->route('deans.students.index');
+        }
+
+        $message = "Login credentials sent to {$sentCount} student(s).";
+
+        if ($failedCount > 0) {
+            $message .= " {$failedCount} email(s) failed.";
+        }
+
+        Inertia::flash('toast', [
+            'type' => $failedCount > 0 ? 'error' : 'success',
+            'message' => $message,
+        ]);
+
+        return redirect()->route('deans.students.index');
+    }
+
     public function destroy(Request $request, Student $student): RedirectResponse
     {
         $course = $this->deanCourseOrFail($request);
@@ -199,6 +286,25 @@ class StudentController extends Controller
         $local = Str::lower((string) preg_replace('/[^a-zA-Z0-9.-]/', '', $studentNumber));
 
         return "{$local}@students.occ.edu.ph";
+    }
+
+    private function sendStudentCredentials(Student $student): void
+    {
+        $student->loadMissing('user');
+
+        $password = Str::password(10);
+
+        $student->user->update([
+            'password' => $password,
+        ]);
+
+        Mail::to($student->user->email)->send(
+            new StudentAccountCredentialsMail(
+                student: $student,
+                plainPassword: $password,
+                loginUrl: route('login'),
+            ),
+        );
     }
 
     private function deanCourse(Request $request): ?Course

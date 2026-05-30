@@ -54,6 +54,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::post('students/bulk', [DeanStudentController::class, 'bulkStore'])
                 ->name('students.bulk-store');
+            Route::post('students/mail-credentials', [DeanStudentController::class, 'mailAllCredentials'])
+                ->name('students.mail-all-credentials');
+            Route::post('students/{student}/mail-credentials', [DeanStudentController::class, 'mailCredentials'])
+                ->name('students.mail-credentials');
             Route::resource('students', DeanStudentController::class)
                 ->except(['show', 'create', 'edit']);
             Route::get('companies', [DeanCompanyController::class, 'index'])->name('companies.index');
