@@ -12,6 +12,7 @@ use App\Http\Controllers\Dean\SupervisorController as DeanSupervisorController;
 use App\Http\Controllers\SuperAdmin\CourseController as SuperAdminCourseController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\DeanController as SuperAdminDeanController;
+use App\Http\Controllers\Supervisor\DashboardController as SupervisorDashboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -26,6 +27,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         }
         if (auth()->user()?->loadMissing('role')->hasRole('coordinator')) {
             return redirect()->route('coordinators.dashboard');
+        }
+        if (auth()->user()?->loadMissing('role')->hasRole('supervisor')) {
+            return redirect()->route('supervisors.dashboard');
         }
 
         return inertia('dashboard');
@@ -102,6 +106,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('students/{student}/documents/{document}', [CoordinatorStudentController::class, 'showDocument'])
                 ->name('students.documents.show');
+        });
+
+    Route::middleware('supervisor')
+        ->prefix('supervisors')
+        ->name('supervisors.')
+        ->group(function () {
+            Route::get('dashboard', [SupervisorDashboardController::class, 'index'])
+                ->name('dashboard');
         });
 });
 
