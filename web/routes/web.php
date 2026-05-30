@@ -52,9 +52,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('school-years/{school_year}/activate', [DeanSchoolYearController::class, 'activate'])
                 ->name('school-years.activate');
 
-            Route::get('students', [DeanStudentController::class, 'index'])->name('students.index');
+            Route::post('students/bulk', [DeanStudentController::class, 'bulkStore'])
+                ->name('students.bulk-store');
+            Route::resource('students', DeanStudentController::class)
+                ->except(['show', 'create', 'edit']);
             Route::get('companies', [DeanCompanyController::class, 'index'])->name('companies.index');
-            Route::get('sections', [DeanSectionController::class, 'index'])->name('sections.index');
+            Route::resource('sections', DeanSectionController::class)
+                ->except(['show', 'create', 'edit']);
             Route::get('supervisors', [DeanSupervisorController::class, 'index'])->name('supervisors.index');
         });
 });

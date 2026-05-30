@@ -28,6 +28,14 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
+
+        Schema::table('students', function (Blueprint $table) {
+            $table->foreignId('supervisor_id')
+                ->nullable()
+                ->after('department_id')
+                ->constrained('supervisors')
+                ->nullOnDelete();
+        });
     }
 
     /**
@@ -35,6 +43,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('students', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('supervisor_id');
+        });
+
         Schema::dropIfExists('supervisors');
     }
 };

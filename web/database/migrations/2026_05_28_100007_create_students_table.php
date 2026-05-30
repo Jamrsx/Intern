@@ -19,6 +19,7 @@ return new class extends Migration
                 ->cascadeOnDelete();
             $table->string('student_number')->unique();
             $table->string('first_name');
+            $table->string('middle_name')->nullable();
             $table->string('last_name');
             $table->foreignId('section_id')
                 ->constrained('sections')

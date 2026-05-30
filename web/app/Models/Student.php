@@ -14,10 +14,12 @@ class Student extends Model
         'user_id',
         'student_number',
         'first_name',
+        'middle_name',
         'last_name',
         'section_id',
         'company_id',
         'department_id',
+        'supervisor_id',
         'is_active',
     ];
 
@@ -29,6 +31,11 @@ class Student extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    public function fullName(): string
+    {
+        return trim(collect([$this->first_name, $this->middle_name, $this->last_name])->filter()->implode(' '));
     }
 
     /**
@@ -61,5 +68,13 @@ class Student extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    /**
+     * @return BelongsTo<Supervisor, $this>
+     */
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(Supervisor::class);
     }
 }
