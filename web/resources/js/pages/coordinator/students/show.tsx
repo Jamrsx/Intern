@@ -1,11 +1,13 @@
-import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { Form, Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ArrowLeft,
     Building2,
+    ClipboardList,
     Clock3,
     Eye,
     FileText,
     Pencil,
+    Plus,
     User,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -30,6 +32,7 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { index as studentsIndex, update } from '@/routes/coordinators/students';
+import { store as storeEvaluation } from '@/routes/coordinators/students/evaluations';
 
 type Section = {
     id: number;
@@ -100,6 +103,20 @@ type DocumentRow = {
     download_url: string;
 };
 
+type EvaluationRow = {
+    id: number;
+    status: 'pending' | 'completed';
+    rating: number | null;
+    comments: string | null;
+    evaluation_date: string | null;
+    opened_at: string;
+    submitted_at: string | null;
+    supervisor: {
+        id: number;
+        name: string;
+    };
+};
+
 type Props = {
     section: Section;
     student: StudentDetail;
@@ -107,6 +124,8 @@ type Props = {
     documents: DocumentRow[];
     companies: CompanyOption[];
     supervisors: SupervisorOption[];
+    evaluations: EvaluationRow[];
+    can_open_evaluation: boolean;
 };
 
 function formatFileSize(bytes: number | null): string {
@@ -138,9 +157,18 @@ function formatDate(value: string | null): string {
 }
 
 export default function CoordinatorStudentShow() {
-    const { section, student, progress, documents, companies, supervisors } =
-        usePage<Props>().props;
+    const {
+        section,
+        student,
+        progress,
+        documents,
+        companies,
+        supervisors,
+        evaluations,
+        can_open_evaluation,
+    } = usePage<Props>().props;
     const [showAssignModal, setShowAssignModal] = useState(false);
+    const [openingEvaluation, setOpeningEvaluation] = useState(false);
     const [companyId, setCompanyId] = useState(
         student.company_id ? String(student.company_id) : 'none',
     );
@@ -155,6 +183,8 @@ export default function CoordinatorStudentShow() {
         studentId: student.id,
         progress,
         documentCount: documents.length,
+        evaluationCount: evaluations.length,
+        can_open_evaluation,
     });
 
     const departments = useMemo(() => {
@@ -200,6 +230,30 @@ export default function CoordinatorStudentShow() {
         );
         setShowAssignModal(true);
     };
+
+    const handleOpenEvaluation = () => {
+        if (
+            !confirm(
+                `Open an OJT evaluation for ${student.full_name}? The assigned supervisor will be able to rate this intern.`,
+            )
+        ) {
+            return;
+        }
+
+        setOpeningEvaluation(true);
+        router.post(
+            storeEvaluation(student.id).url,
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setOpeningEvaluation(false),
+            },
+        );
+    };
+
+    const pendingEvaluation = evaluations.find(
+        (evaluation) => evaluation.status === 'pending',
+    );
 
     return (
         <>
@@ -404,6 +458,143 @@ export default function CoordinatorStudentShow() {
                         </CardContent>
                     </Card>
                 </div>
+
+                <Card className="border-sidebar-border/70 shadow-sm">
+                    <CardHeader>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <ClipboardList className="size-5 text-brand" />
+                                    <CardTitle>OJT evaluations</CardTitle>
+                                </div>
+                                <CardDescription>
+                                    Open an evaluation for the company supervisor
+                                    to rate this intern. Rating, comments, and
+                                    evaluation date are filled in by the supervisor.
+                                </CardDescription>
+                            </div>
+                            {student.is_active && (
+                                <Button
+                                    type="button"
+                                    onClick={handleOpenEvaluation}
+                                    disabled={
+                                        !can_open_evaluation || openingEvaluation
+                                    }
+                                    className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                                >
+                                    {openingEvaluation ? (
+                                        <Spinner />
+                                    ) : (
+                                        <Plus className="mr-1 size-4" />
+                                    )}
+                                    Open evaluation
+                                </Button>
+                            )}
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {!student.supervisor && (
+                            <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                                Assign a supervisor first before opening an
+                                evaluation.
+                            </p>
+                        )}
+
+                        {pendingEvaluation && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+                                Waiting for{' '}
+                                <span className="font-medium">
+                                    {pendingEvaluation.supervisor.name}
+                                </span>{' '}
+                                to submit the evaluation opened on{' '}
+                                {formatDate(pendingEvaluation.opened_at)}.
+                            </div>
+                        )}
+
+                        {evaluations.length === 0 ? (
+                            <div className="rounded-lg border border-dashed py-10 text-center text-muted-foreground">
+                                No evaluations yet. Open one when the intern is
+                                ready to be rated by the company supervisor.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b bg-muted/40 text-left">
+                                            <th className="px-4 py-3 font-medium">
+                                                Status
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Supervisor
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Rating
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Evaluation date
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Comments
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Opened
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {evaluations.map((evaluation) => (
+                                            <tr
+                                                key={evaluation.id}
+                                                className="border-b last:border-0"
+                                            >
+                                                <td className="px-4 py-3">
+                                                    <Badge
+                                                        variant={
+                                                            evaluation.status ===
+                                                            'completed'
+                                                                ? 'default'
+                                                                : 'secondary'
+                                                        }
+                                                        className={
+                                                            evaluation.status ===
+                                                            'completed'
+                                                                ? 'bg-brand text-brand-foreground'
+                                                                : undefined
+                                                        }
+                                                    >
+                                                        {evaluation.status ===
+                                                        'completed'
+                                                            ? 'Completed'
+                                                            : 'Pending'}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {evaluation.supervisor.name}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {evaluation.rating ?? '—'}
+                                                </td>
+                                                <td className="px-4 py-3 text-muted-foreground">
+                                                    {formatDate(
+                                                        evaluation.evaluation_date,
+                                                    )}
+                                                </td>
+                                                <td className="max-w-xs px-4 py-3 text-muted-foreground">
+                                                    {evaluation.comments ?? '—'}
+                                                </td>
+                                                <td className="px-4 py-3 text-muted-foreground">
+                                                    {formatDate(
+                                                        evaluation.opened_at,
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
                 <Card className="border-sidebar-border/70 shadow-sm">
                     <CardHeader>

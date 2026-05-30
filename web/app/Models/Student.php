@@ -103,4 +103,21 @@ class Student extends Model
     {
         return $this->hasOne(OjtSchedule::class);
     }
+
+    /**
+     * @return HasMany<OjtEvaluation, $this>
+     */
+    public function ojtEvaluations(): HasMany
+    {
+        return $this->hasMany(OjtEvaluation::class);
+    }
+
+    /**
+     * @return HasOne<OjtEvaluation, $this>
+     */
+    public function pendingOjtEvaluation(): HasOne
+    {
+        return $this->hasOne(OjtEvaluation::class)
+            ->where('status', OjtEvaluation::STATUS_PENDING);
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Coordinator;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Coordinator\UpdateStudentPlacementRequest;
 use App\Models\Company;
+use App\Models\OjtEvaluation;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentDocument;
@@ -70,6 +71,12 @@ class StudentController extends Controller
                 ->all(),
             'companies' => $this->companyOptions($section),
             'supervisors' => $this->supervisorOptions($section),
+            'evaluations' => $this->evaluationList($student),
+            'can_open_evaluation' => $student->supervisor_id !== null
+                && ! OjtEvaluation::query()
+                    ->where('student_id', $student->id)
+                    ->where('status', OjtEvaluation::STATUS_PENDING)
+                    ->exists(),
         ]);
     }
 
@@ -274,6 +281,33 @@ class StudentController extends Controller
                 'name' => $supervisor->user->name,
                 'company_id' => $supervisor->company_id,
                 'department_id' => $supervisor->department_id,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function evaluationList(Student $student): array
+    {
+        return OjtEvaluation::query()
+            ->with(['supervisor.user:id,name'])
+            ->where('student_id', $student->id)
+            ->orderByDesc('opened_at')
+            ->get()
+            ->map(fn (OjtEvaluation $evaluation) => [
+                'id' => $evaluation->id,
+                'status' => $evaluation->status,
+                'rating' => $evaluation->rating,
+                'comments' => $evaluation->comments,
+                'evaluation_date' => $evaluation->evaluation_date?->toDateString(),
+                'opened_at' => $evaluation->opened_at->toIso8601String(),
+                'submitted_at' => $evaluation->submitted_at?->toIso8601String(),
+                'supervisor' => [
+                    'id' => $evaluation->supervisor_id,
+                    'name' => $evaluation->supervisor->user->name,
+                ],
             ])
             ->values()
             ->all();

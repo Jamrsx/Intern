@@ -1,7 +1,22 @@
-import { Head, usePage } from '@inertiajs/react';
-import { Building2, Clock, Users } from 'lucide-react';
+import { Form, Head, usePage } from '@inertiajs/react';
+import { Building2, ClipboardList, Clock, Users } from 'lucide-react';
+import { useState } from 'react';
+import InputError from '@/components/input-error';
+import { AppModal } from '@/components/superadmin/app-modal';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
+import { update as submitEvaluation } from '@/routes/supervisors/evaluations';
 import { dashboard as supervisorDashboard } from '@/routes/supervisors';
 import type { Auth } from '@/types';
 
@@ -13,6 +28,11 @@ type Progress = {
     time_log_count: number;
 };
 
+type PendingEvaluation = {
+    id: number;
+    opened_at: string;
+};
+
 type InternRow = {
     id: number;
     full_name: string;
@@ -22,6 +42,7 @@ type InternRow = {
         school_year: string | null | undefined;
     } | null;
     progress: Progress;
+    pending_evaluation: PendingEvaluation | null;
 };
 
 type Props = {
@@ -36,12 +57,18 @@ type Props = {
     stats: {
         interns: number;
         total_rendered_hours: number;
+        pending_evaluations: number;
     };
     interns: InternRow[];
 };
 
 export default function SupervisorDashboard() {
     const { auth, supervisor, stats, interns } = usePage<Props>().props;
+    const [evaluateIntern, setEvaluateIntern] = useState<InternRow | null>(null);
+    const [rating, setRating] = useState('3');
+    const [evaluationDate, setEvaluationDate] = useState(
+        new Date().toISOString().slice(0, 10),
+    );
 
     console.log('Supervisor dashboard loaded', {
         user: auth.user,
@@ -49,6 +76,16 @@ export default function SupervisorDashboard() {
         stats,
         internCount: interns.length,
     });
+
+    const openEvaluationModal = (intern: InternRow) => {
+        setEvaluateIntern(intern);
+        setRating('3');
+        setEvaluationDate(new Date().toISOString().slice(0, 10));
+        console.log('Supervisor evaluation modal opened', {
+            internId: intern.id,
+            evaluationId: intern.pending_evaluation?.id,
+        });
+    };
 
     return (
         <>
@@ -60,12 +97,12 @@ export default function SupervisorDashboard() {
                         Welcome back, {auth.user.name}
                     </h1>
                     <p className="mt-1 text-sm text-brand-foreground/80">
-                        View rendered OJT hours for interns assigned to you by
-                        the coordinator.
+                        View rendered OJT hours and submit evaluations for
+                        interns assigned to you.
                     </p>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Card className="border-sidebar-border/70 shadow-sm">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -115,7 +152,26 @@ export default function SupervisorDashboard() {
                         </CardContent>
                     </Card>
 
-                    <Card className="border-sidebar-border/70 shadow-sm sm:col-span-2 lg:col-span-1">
+                    <Card className="border-sidebar-border/70 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                Pending Evaluations
+                            </CardTitle>
+                            <div className="rounded-lg bg-amber-500/15 p-2">
+                                <ClipboardList className="size-4 text-amber-600" />
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-3xl font-bold">
+                                {stats.pending_evaluations}
+                            </p>
+                            <CardDescription className="mt-1">
+                                Awaiting your rating
+                            </CardDescription>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-sidebar-border/70 shadow-sm">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">
                                 Total Rendered Hours
@@ -143,6 +199,8 @@ export default function SupervisorDashboard() {
                         <CardTitle>Assigned Interns</CardTitle>
                         <CardDescription>
                             Rendered hours are based on verified time logs.
+                            Submit evaluations when the coordinator opens one
+                            for an intern.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -168,6 +226,12 @@ export default function SupervisorDashboard() {
                                             </th>
                                             <th className="px-4 py-3 font-medium">
                                                 Progress
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
+                                                Evaluation
+                                            </th>
+                                            <th className="px-4 py-3 text-right font-medium">
+                                                Action
                                             </th>
                                         </tr>
                                     </thead>
@@ -227,16 +291,11 @@ export default function SupervisorDashboard() {
                                                             intern.progress
                                                                 .remaining_hours
                                                         }{' '}
-                                                        hrs remaining •{' '}
-                                                        {
-                                                            intern.progress
-                                                                .time_log_count
-                                                        }{' '}
-                                                        log(s)
+                                                        hrs remaining
                                                     </p>
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <div className="flex min-w-[140px] flex-col gap-1">
+                                                    <div className="flex min-w-[120px] flex-col gap-1">
                                                         <div className="h-2 overflow-hidden rounded-full bg-muted">
                                                             <div
                                                                 className="h-full rounded-full bg-brand transition-all"
@@ -257,6 +316,36 @@ export default function SupervisorDashboard() {
                                                         </Badge>
                                                     </div>
                                                 </td>
+                                                <td className="px-4 py-3">
+                                                    {intern.pending_evaluation ? (
+                                                        <Badge variant="secondary">
+                                                            Pending
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">
+                                                            —
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 text-right">
+                                                    {intern.pending_evaluation ? (
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                                                            onClick={() =>
+                                                                openEvaluationModal(
+                                                                    intern,
+                                                                )
+                                                            }
+                                                        >
+                                                            Evaluate
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">
+                                                            No open evaluation
+                                                        </span>
+                                                    )}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -266,6 +355,126 @@ export default function SupervisorDashboard() {
                     </CardContent>
                 </Card>
             </div>
+
+            {evaluateIntern?.pending_evaluation && (
+                <AppModal
+                    open={evaluateIntern !== null}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setEvaluateIntern(null);
+                        }
+                    }}
+                    title={`Evaluate ${evaluateIntern.full_name}`}
+                    description="Provide a rating, comments, and evaluation date for this intern."
+                    className="sm:max-w-lg"
+                >
+                    <Form
+                        action={submitEvaluation(
+                            evaluateIntern.pending_evaluation.id,
+                        ).url}
+                        method={
+                            submitEvaluation(
+                                evaluateIntern.pending_evaluation.id,
+                            ).method
+                        }
+                        options={{ preserveScroll: true }}
+                        onSuccess={() => setEvaluateIntern(null)}
+                        className="space-y-4"
+                    >
+                        {({ processing, errors }) => (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="rating">Rating</Label>
+                                    <input
+                                        type="hidden"
+                                        name="rating"
+                                        value={rating}
+                                    />
+                                    <Select
+                                        value={rating}
+                                        onValueChange={setRating}
+                                    >
+                                        <SelectTrigger id="rating">
+                                            <SelectValue placeholder="Select rating" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="5">
+                                                5 - Outstanding
+                                            </SelectItem>
+                                            <SelectItem value="4">
+                                                4 - Very Good
+                                            </SelectItem>
+                                            <SelectItem value="3">
+                                                3 - Satisfactory
+                                            </SelectItem>
+                                            <SelectItem value="2">
+                                                2 - Needs Improvement
+                                            </SelectItem>
+                                            <SelectItem value="1">
+                                                1 - Poor
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={errors.rating} />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="evaluation_date">
+                                        Evaluation Date
+                                    </Label>
+                                    <Input
+                                        id="evaluation_date"
+                                        type="date"
+                                        name="evaluation_date"
+                                        value={evaluationDate}
+                                        max={new Date()
+                                            .toISOString()
+                                            .slice(0, 10)}
+                                        onChange={(event) =>
+                                            setEvaluationDate(event.target.value)
+                                        }
+                                    />
+                                    <InputError
+                                        message={errors.evaluation_date}
+                                    />
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="comments">Comments</Label>
+                                    <textarea
+                                        id="comments"
+                                        name="comments"
+                                        rows={4}
+                                        placeholder="Describe the intern's performance, strengths, and areas for improvement."
+                                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    />
+                                    <InputError message={errors.comments} />
+                                </div>
+
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() =>
+                                            setEvaluateIntern(null)
+                                        }
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        disabled={processing}
+                                        className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                                    >
+                                        {processing && <Spinner />}
+                                        Submit evaluation
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </Form>
+                </AppModal>
+            )}
         </>
     );
 }

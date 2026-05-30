@@ -28,6 +28,7 @@ class DashboardController extends Controller
 
         $interns = [];
         $totalRenderedHours = 0.0;
+        $pendingEvaluations = 0;
 
         if ($supervisor !== null) {
             $students = Student::query()
@@ -36,6 +37,7 @@ class DashboardController extends Controller
                 ->with([
                     'section.course:id,code,name,required_hours',
                     'section.schoolYear:id,name',
+                    'pendingOjtEvaluation:id,student_id,status,opened_at',
                 ])
                 ->orderBy('last_name')
                 ->orderBy('first_name')
@@ -45,6 +47,12 @@ class DashboardController extends Controller
                 $requiredHours = (int) ($student->section?->course?->required_hours ?? 0);
                 $progress = OjtProgressCalculator::forStudent($student, $requiredHours);
                 $totalRenderedHours += (float) $progress['rendered_hours'];
+
+                $pendingEvaluation = $student->pendingOjtEvaluation;
+
+                if ($pendingEvaluation !== null) {
+                    $pendingEvaluations++;
+                }
 
                 $interns[] = [
                     'id' => $student->id,
@@ -57,6 +65,10 @@ class DashboardController extends Controller
                         'school_year' => $student->section->schoolYear?->name,
                     ] : null,
                     'progress' => $progress,
+                    'pending_evaluation' => $pendingEvaluation ? [
+                        'id' => $pendingEvaluation->id,
+                        'opened_at' => $pendingEvaluation->opened_at->toIso8601String(),
+                    ] : null,
                 ];
             }
         }
@@ -78,6 +90,7 @@ class DashboardController extends Controller
             'stats' => [
                 'interns' => count($interns),
                 'total_rendered_hours' => round($totalRenderedHours, 2),
+                'pending_evaluations' => $pendingEvaluations,
             ],
             'interns' => $interns,
         ]);
