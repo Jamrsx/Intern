@@ -1,6 +1,5 @@
 import { Link } from '@inertiajs/react';
 import {
-    BookOpen,
     Building2,
     Briefcase,
     CalendarDays,
@@ -9,6 +8,7 @@ import {
     UserCog,
     Users,
 } from 'lucide-react';
+import { BrandLogoMark } from '@/components/brand-logo-mark';
 import { NavGrouped } from '@/components/nav-grouped';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -99,9 +99,7 @@ export function DeanSidebar() {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href={dashboard()} prefetch>
-                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-brand">
-                                    <BookOpen className="size-4 text-brand-foreground" />
-                                </div>
+                                <BrandLogoMark />
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-semibold">
                                         OCC Intern

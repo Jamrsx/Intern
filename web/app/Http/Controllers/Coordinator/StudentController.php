@@ -28,6 +28,7 @@ class StudentController extends Controller
         return Inertia::render('coordinator/students', [
             'section' => $this->sectionPayload($section),
             'students' => $students,
+            'evaluation_stats' => $this->evaluationStats($section),
         ]);
     }
 
@@ -311,5 +312,38 @@ class StudentController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array{eligible: int, pending: int, without_supervisor: int}
+     */
+    private function evaluationStats(?Section $section): array
+    {
+        if ($section === null) {
+            return [
+                'eligible' => 0,
+                'pending' => 0,
+                'without_supervisor' => 0,
+            ];
+        }
+
+        $activeStudents = Student::query()
+            ->where('section_id', $section->id)
+            ->where('is_active', true)
+            ->get();
+
+        $pendingStudentIds = OjtEvaluation::query()
+            ->where('status', OjtEvaluation::STATUS_PENDING)
+            ->whereIn('student_id', $activeStudents->pluck('id'))
+            ->pluck('student_id');
+
+        return [
+            'eligible' => $activeStudents
+                ->whereNotNull('supervisor_id')
+                ->whereNotIn('id', $pendingStudentIds)
+                ->count(),
+            'pending' => $pendingStudentIds->unique()->count(),
+            'without_supervisor' => $activeStudents->whereNull('supervisor_id')->count(),
+        ];
     }
 }

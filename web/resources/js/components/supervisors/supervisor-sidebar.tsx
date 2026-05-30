@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, Clock, LayoutGrid } from 'lucide-react';
+import { BrandLogoMark } from '@/components/brand-logo-mark';
+import { LayoutGrid } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
 import {
@@ -30,9 +31,7 @@ export function SupervisorSidebar() {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href={dashboard()} prefetch>
-                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-brand">
-                                    <BookOpen className="size-4 text-brand-foreground" />
-                                </div>
+                                <BrandLogoMark />
                                 <div className="grid flex-1 text-left text-sm leading-tight">
                                     <span className="truncate font-semibold">
                                         OCC Intern

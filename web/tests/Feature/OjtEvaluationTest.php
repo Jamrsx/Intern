@@ -234,6 +234,53 @@ it('shows pending evaluations on the supervisor dashboard', function () {
             ->where('interns.0.pending_evaluation.id', OjtEvaluation::query()->value('id')));
 });
 
+it('allows a coordinator to open evaluations for all eligible students', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    [
+        'coordinator' => $coordinator,
+        'student' => $student,
+        'supervisor' => $supervisor,
+    ] = createSupervisorEvaluationContext();
+
+    $secondInternUser = User::factory()->create([
+        'role_id' => Role::query()->where('name', 'intern')->value('id'),
+    ]);
+
+    $secondStudent = Student::query()->create([
+        'user_id' => $secondInternUser->id,
+        'student_number' => '2022-1-04312',
+        'first_name' => 'Jane',
+        'last_name' => 'Smith',
+        'section_id' => $student->section_id,
+        'company_id' => $student->company_id,
+        'department_id' => $student->department_id,
+        'supervisor_id' => $supervisor->id,
+        'is_active' => true,
+    ]);
+
+    Student::query()->create([
+        'user_id' => User::factory()->create([
+            'role_id' => Role::query()->where('name', 'intern')->value('id'),
+        ])->id,
+        'student_number' => '2022-1-04313',
+        'first_name' => 'No',
+        'last_name' => 'Supervisor',
+        'section_id' => $student->section_id,
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($coordinator)
+        ->from(route('coordinators.students.index'))
+        ->post(route('coordinators.students.evaluations.store-all'))
+        ->assertRedirect(route('coordinators.students.index'));
+
+    expect(OjtEvaluation::query()->count())->toBe(2);
+    expect(OjtEvaluation::query()->where('student_id', $student->id)->exists())->toBeTrue();
+    expect(OjtEvaluation::query()->where('student_id', $secondStudent->id)->exists())->toBeTrue();
+});
+
 it('blocks supervisors from submitting another supervisors evaluation', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);

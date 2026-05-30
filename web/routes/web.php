@@ -17,7 +17,13 @@ use App\Http\Controllers\Supervisor\DashboardController as SupervisorDashboardCo
 use App\Http\Controllers\Supervisor\OjtEvaluationController as SupervisorOjtEvaluationController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'welcome')->name('home');
+Route::get('/', function () {
+    if (auth()->check()) {
+        return redirect()->route('dashboard');
+    }
+
+    return redirect()->route('login');
+})->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
@@ -111,6 +117,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::post('students/{student}/evaluations', [CoordinatorOjtEvaluationController::class, 'store'])
                 ->name('students.evaluations.store');
+            Route::post('students/evaluations/bulk', [CoordinatorOjtEvaluationController::class, 'storeAll'])
+                ->name('students.evaluations.store-all');
         });
 
     Route::middleware('supervisor')

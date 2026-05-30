@@ -8,6 +8,7 @@ use App\Models\Section;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class OjtEvaluationController extends Controller
@@ -30,13 +31,7 @@ class OjtEvaluationController extends Controller
 
         abort_if($hasPending, 422, 'This student already has a pending evaluation.');
 
-        OjtEvaluation::query()->create([
-            'student_id' => $student->id,
-            'supervisor_id' => $student->supervisor_id,
-            'opened_by_user_id' => $request->user()->id,
-            'status' => OjtEvaluation::STATUS_PENDING,
-            'opened_at' => now(),
-        ]);
+        $this->openEvaluation($student, $request->user()->id);
 
         Inertia::flash('toast', [
             'type' => 'success',
@@ -44,6 +39,81 @@ class OjtEvaluationController extends Controller
         ]);
 
         return redirect()->back();
+    }
+
+    public function storeAll(Request $request): RedirectResponse
+    {
+        $section = $this->coordinatorSectionOrFail($request);
+        $userId = $request->user()->id;
+
+        $activeStudents = Student::query()
+            ->where('section_id', $section->id)
+            ->where('is_active', true)
+            ->get();
+
+        $eligibleStudents = $activeStudents->filter(function (Student $student): bool {
+            if ($student->supervisor_id === null) {
+                return false;
+            }
+
+            return ! OjtEvaluation::query()
+                ->where('student_id', $student->id)
+                ->where('status', OjtEvaluation::STATUS_PENDING)
+                ->exists();
+        });
+
+        if ($eligibleStudents->isEmpty()) {
+            $withoutSupervisor = $activeStudents->whereNull('supervisor_id')->count();
+
+            $message = $withoutSupervisor > 0
+                ? 'No evaluations were opened. Assign supervisors to students first, or wait until pending evaluations are completed.'
+                : 'No evaluations were opened. All assigned students already have a pending evaluation.';
+
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => $message,
+            ]);
+
+            return redirect()->back();
+        }
+
+        DB::transaction(function () use ($eligibleStudents, $userId): void {
+            foreach ($eligibleStudents as $student) {
+                $this->openEvaluation($student, $userId);
+            }
+        });
+
+        $openedCount = $eligibleStudents->count();
+        $skippedNoSupervisor = $activeStudents->whereNull('supervisor_id')->count();
+        $skippedPending = $activeStudents->whereNotNull('supervisor_id')->count() - $openedCount;
+
+        $message = "Opened evaluations for {$openedCount} student(s).";
+
+        if ($skippedNoSupervisor > 0) {
+            $message .= " {$skippedNoSupervisor} skipped (no supervisor assigned).";
+        }
+
+        if ($skippedPending > 0) {
+            $message .= " {$skippedPending} skipped (evaluation already pending).";
+        }
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => $message,
+        ]);
+
+        return redirect()->back();
+    }
+
+    private function openEvaluation(Student $student, int $openedByUserId): void
+    {
+        OjtEvaluation::query()->create([
+            'student_id' => $student->id,
+            'supervisor_id' => $student->supervisor_id,
+            'opened_by_user_id' => $openedByUserId,
+            'status' => OjtEvaluation::STATUS_PENDING,
+            'opened_at' => now(),
+        ]);
     }
 
     private function coordinatorSectionOrFail(Request $request): Section
