@@ -22,7 +22,7 @@ class BulkStoreStudentRequest extends FormRequest
 
         return [
             'section_id' => [
-                'required',
+                'nullable',
                 'integer',
                 Rule::exists('sections', 'id')->where(function ($query) use ($courseId) {
                     $query->where('course_id', $courseId)
@@ -35,7 +35,21 @@ class BulkStoreStudentRequest extends FormRequest
                 }),
             ],
             'students' => ['required', 'array', 'min:1', 'max:100'],
-            'students.*.email' => ['required', 'string', 'email', 'max:255', 'distinct', 'unique:users,email'],
+            'students.*.section_id' => [
+                'required_without:section_id',
+                'nullable',
+                'integer',
+                Rule::exists('sections', 'id')->where(function ($query) use ($courseId) {
+                    $query->where('course_id', $courseId)
+                        ->where('is_active', true)
+                        ->whereIn('school_year_id', function ($subQuery) {
+                            $subQuery->select('id')
+                                ->from('school_years')
+                                ->where('is_active', true);
+                        });
+                }),
+            ],
+            'students.*.email' => ['nullable', 'string', 'email', 'max:255', 'distinct', 'unique:users,email'],
             'students.*.student_number' => [
                 'required',
                 'string',

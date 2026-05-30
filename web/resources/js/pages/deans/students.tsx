@@ -1,6 +1,6 @@
 import { Form, Head, Link, router } from '@inertiajs/react';
-import { ChevronDown, Pencil, Plus, Search, Upload, Users } from 'lucide-react';
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { ChevronDown, Download, FileSpreadsheet, Pencil, Plus, Search, Upload, Users } from 'lucide-react';
+import { useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { PageHeader } from '@/components/superadmin/page-header';
@@ -24,6 +24,11 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import {
+    downloadStudentImportTemplate,
+    parseStudentImportFile,
+    type BulkImportRow,
+} from '@/lib/dean-student-import';
 import { bulkStore, destroy, index as studentsIndex, store, update } from '@/routes/deans/students';
 import { index as sectionsIndex } from '@/routes/deans/sections';
 
@@ -76,13 +81,7 @@ type StudentRow = {
     is_active: boolean;
 };
 
-type BulkStudentDraft = {
-    student_number: string;
-    email: string;
-    first_name: string;
-    middle_name: string;
-    last_name: string;
-};
+type BulkImportPreviewRow = BulkImportRow;
 
 type StudentGroup = {
     sectionId: number;
@@ -233,14 +232,6 @@ function StudentGroupTable({
     );
 }
 
-const emptyBulkRow = (): BulkStudentDraft => ({
-    student_number: '',
-    email: '',
-    first_name: '',
-    middle_name: '',
-    last_name: '',
-});
-
 function studentMatchesSearch(student: StudentRow, query: string): boolean {
     const normalized = query.trim().toLowerCase();
 
@@ -305,16 +296,16 @@ export default function DeanStudents({
     const [bulkOpen, setBulkOpen] = useState(false);
     const [editStudent, setEditStudent] = useState<StudentRow | null>(null);
     const [createSectionId, setCreateSectionId] = useState('');
-    const [bulkSectionId, setBulkSectionId] = useState('');
     const [editSectionId, setEditSectionId] = useState('');
     const [editCompanyId, setEditCompanyId] = useState('none');
     const [editDepartmentId, setEditDepartmentId] = useState('none');
     const [editSupervisorId, setEditSupervisorId] = useState('none');
-    const [bulkRows, setBulkRows] = useState<BulkStudentDraft[]>([
-        emptyBulkRow(),
-        emptyBulkRow(),
-        emptyBulkRow(),
-    ]);
+    const [bulkImportRows, setBulkImportRows] = useState<BulkImportPreviewRow[]>(
+        [],
+    );
+    const [bulkImportError, setBulkImportError] = useState<string | null>(null);
+    const [bulkImportFileName, setBulkImportFileName] = useState('');
+    const bulkImportInputRef = useRef<HTMLInputElement>(null);
     const [filterSectionId, setFilterSectionId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [openGroups, setOpenGroups] = useState<Record<number, boolean>>({});
@@ -329,6 +320,66 @@ export default function DeanStudents({
 
     const storeRoute = store();
     const bulkStoreRoute = bulkStore();
+    const bulkImportHasErrors = bulkImportRows.some(
+        (row) => row.errors.length > 0,
+    );
+    const canSubmitBulkImport =
+        bulkImportRows.length > 0 && !bulkImportHasErrors;
+
+    const resetBulkImport = () => {
+        setBulkImportRows([]);
+        setBulkImportError(null);
+        setBulkImportFileName('');
+
+        if (bulkImportInputRef.current) {
+            bulkImportInputRef.current.value = '';
+        }
+    };
+
+    const openBulkImportModal = () => {
+        resetBulkImport();
+        setBulkOpen(true);
+    };
+
+    const handleDownloadTemplate = () => {
+        if (!course) {
+            return;
+        }
+
+        downloadStudentImportTemplate(course.code, sections);
+    };
+
+    const handleBulkImportFile = async (
+        event: ChangeEvent<HTMLInputElement>,
+    ) => {
+        const file = event.target.files?.[0];
+
+        if (!file) {
+            return;
+        }
+
+        setBulkImportError(null);
+        setBulkImportFileName(file.name);
+
+        try {
+            const parsedRows = await parseStudentImportFile(file, sections);
+            setBulkImportRows(parsedRows);
+
+            if (parsedRows.length === 0) {
+                setBulkImportError(
+                    'No student rows were found. Fill in the Students sheet and try again.',
+                );
+            }
+        } catch (error) {
+            console.error('Dean student import failed', error);
+            setBulkImportRows([]);
+            setBulkImportError(
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to import the Excel file.',
+            );
+        }
+    };
 
     console.log('Dean Students page loaded', {
         course,
@@ -467,22 +518,6 @@ export default function DeanStudents({
         );
     };
 
-    const updateBulkRow = (
-        index: number,
-        field: keyof BulkStudentDraft,
-        value: string,
-    ) => {
-        setBulkRows((rows) =>
-            rows.map((row, rowIndex) =>
-                rowIndex === index ? { ...row, [field]: value } : row,
-            ),
-        );
-    };
-
-    const addBulkRow = () => {
-        setBulkRows((rows) => [...rows, emptyBulkRow()]);
-    };
-
     const canManageStudents = course !== null && sections.length > 0;
 
     return (
@@ -504,13 +539,7 @@ export default function DeanStudents({
                             <div className="flex flex-wrap gap-2">
                                 <Button
                                     variant="outline"
-                                    onClick={() => {
-                                        setBulkSectionId(
-                                            createSectionId ||
-                                                String(sections[0]?.id ?? ''),
-                                        );
-                                        setBulkOpen(true);
-                                    }}
+                                    onClick={openBulkImportModal}
                                 >
                                     <Upload className="mr-2 size-4" />
                                     Bulk Add
@@ -832,173 +861,329 @@ export default function DeanStudents({
             {course && (
                 <AppModal
                     open={bulkOpen}
-                    onOpenChange={setBulkOpen}
+                    onOpenChange={(open) => {
+                        setBulkOpen(open);
+
+                        if (!open) {
+                            resetBulkImport();
+                        }
+                    }}
                     title="Bulk Add Students"
-                    description="Add multiple students to the same section."
+                    description="Import students from an Excel file using the provided template."
                     className="sm:max-w-4xl"
                 >
                     <Form
                         action={bulkStoreRoute.url}
                         method={bulkStoreRoute.method}
-                        onSuccess={() => setBulkOpen(false)}
+                        onSuccess={() => {
+                            setBulkOpen(false);
+                            resetBulkImport();
+                        }}
                         className="space-y-4"
                     >
                         {({ processing, errors }) => (
                             <>
+                                <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+                                    <p className="font-medium text-foreground">
+                                        Template format
+                                    </p>
+                                    <p className="mt-1">
+                                        Row 1 is the header row. Enter each
+                                        student starting from row 2 (one student
+                                        per row).
+                                    </p>
+                                    <div className="mt-3 overflow-x-auto rounded-md border bg-background">
+                                        <table className="w-full min-w-[640px] text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b bg-muted/50">
+                                                    <th className="px-3 py-2 font-medium text-foreground">
+                                                        A · studentid
+                                                    </th>
+                                                    <th className="px-3 py-2 font-medium text-foreground">
+                                                        B · gmail
+                                                    </th>
+                                                    <th className="px-3 py-2 font-medium text-foreground">
+                                                        C · lastname
+                                                    </th>
+                                                    <th className="px-3 py-2 font-medium text-foreground">
+                                                        D · firstname
+                                                    </th>
+                                                    <th className="px-3 py-2 font-medium text-foreground">
+                                                        E · middleinitial
+                                                    </th>
+                                                    <th className="px-3 py-2 font-medium text-foreground">
+                                                        F · section
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td className="px-3 py-2">
+                                                        2022-1-04311
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        name@gmail.com
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        Doe
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        John
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        M
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                        4A
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p className="mt-2">
+                                        Use section codes only (4A, 4B, 4C).
+                                        Gmail and middle initial are optional.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="bulk-import-file">
+                                            Import Excel file
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Upload a .xlsx or .xls file from
+                                            the template.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleDownloadTemplate}
+                                    >
+                                        <Download className="mr-2 size-4" />
+                                        Download Template
+                                    </Button>
+                                </div>
+
                                 <div className="grid gap-2">
-                                    <Label>Section for all students</Label>
-                                    <SectionSelect
-                                        sections={sections}
-                                        value={bulkSectionId}
-                                        onChange={setBulkSectionId}
+                                    <Input
+                                        id="bulk-import-file"
+                                        ref={bulkImportInputRef}
+                                        type="file"
+                                        accept=".xlsx,.xls"
+                                        onChange={handleBulkImportFile}
                                     />
-                                    <InputError message={errors.section_id} />
+                                    {bulkImportFileName && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Selected file: {bulkImportFileName}
+                                        </p>
+                                    )}
+                                    {bulkImportError && (
+                                        <p className="text-sm text-red-600">
+                                            {bulkImportError}
+                                        </p>
+                                    )}
                                 </div>
 
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <Label>Student list</Label>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={addBulkRow}
-                                        >
-                                            <Plus className="mr-1 size-3.5" />
-                                            Add row
-                                        </Button>
-                                    </div>
+                                {bulkImportRows.length > 0 && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <Label>
+                                                Import preview (
+                                                {bulkImportRows.length} student
+                                                {bulkImportRows.length === 1
+                                                    ? ''
+                                                    : 's'}
+                                                )
+                                            </Label>
+                                            {bulkImportHasErrors && (
+                                                <Badge variant="secondary">
+                                                    Fix highlighted rows before
+                                                    importing
+                                                </Badge>
+                                            )}
+                                        </div>
 
-                                    <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
-                                        {bulkRows.map((row, index) => (
-                                            <div
-                                                key={index}
-                                                className="grid gap-2 rounded-lg border p-3 sm:grid-cols-2"
-                                            >
-                                                <div className="grid gap-2 sm:col-span-2">
-                                                    <Label>Student ID</Label>
-                                                    <Input
-                                                        name={`students[${index}][student_number]`}
-                                                        defaultValue={
-                                                            row.student_number
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateBulkRow(
-                                                                index,
-                                                                'student_number',
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                        placeholder="2022-1-04311"
-                                                        pattern="\d{4}-\d{1,2}-\d{4,6}"
-                                                    />
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `students.${index}.student_number`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2 sm:col-span-2">
-                                                    <Label>Email</Label>
-                                                    <Input
-                                                        name={`students[${index}][email]`}
-                                                        type="email"
-                                                        defaultValue={
-                                                            row.email
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateBulkRow(
-                                                                index,
-                                                                'email',
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                    />
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `students.${index}.email`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2">
-                                                    <Label>First name</Label>
-                                                    <Input
-                                                        name={`students[${index}][first_name]`}
-                                                        defaultValue={
-                                                            row.first_name
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateBulkRow(
-                                                                index,
-                                                                'first_name',
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                    />
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `students.${index}.first_name`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2">
-                                                    <Label>Middle name</Label>
-                                                    <Input
-                                                        name={`students[${index}][middle_name]`}
-                                                        defaultValue={
-                                                            row.middle_name
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateBulkRow(
-                                                                index,
-                                                                'middle_name',
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2 sm:col-span-2">
-                                                    <Label>Last name</Label>
-                                                    <Input
-                                                        name={`students[${index}][last_name]`}
-                                                        defaultValue={
-                                                            row.last_name
-                                                        }
-                                                        onChange={(event) =>
-                                                            updateBulkRow(
-                                                                index,
-                                                                'last_name',
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                    />
-                                                    <InputError
-                                                        message={
-                                                            errors[
-                                                                `students.${index}.last_name`
-                                                            ]
-                                                        }
-                                                    />
-                                                </div>
-                                            </div>
-                                        ))}
+                                        <div className="max-h-80 overflow-auto rounded-lg border">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b bg-muted/40 text-left">
+                                                        <th className="px-3 py-2 font-medium">
+                                                            Student ID
+                                                        </th>
+                                                        <th className="px-3 py-2 font-medium">
+                                                            Name
+                                                        </th>
+                                                        <th className="px-3 py-2 font-medium">
+                                                            Section
+                                                        </th>
+                                                        <th className="px-3 py-2 font-medium">
+                                                            Email
+                                                        </th>
+                                                        <th className="px-3 py-2 font-medium">
+                                                            Status
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {bulkImportRows.map(
+                                                        (row, index) => (
+                                                            <tr
+                                                                key={`${row.student_number}-${index}`}
+                                                                className={cn(
+                                                                    'border-b last:border-0',
+                                                                    row.errors
+                                                                        .length >
+                                                                        0 &&
+                                                                        'bg-red-50/70 dark:bg-red-950/20',
+                                                                )}
+                                                            >
+                                                                <td className="px-3 py-2 align-top">
+                                                                    <input
+                                                                        type="hidden"
+                                                                        name={`students[${index}][student_number]`}
+                                                                        value={
+                                                                            row.student_number
+                                                                        }
+                                                                    />
+                                                                    {
+                                                                        row.student_number
+                                                                    }
+                                                                    <InputError
+                                                                        message={
+                                                                            errors[
+                                                                                `students.${index}.student_number`
+                                                                            ]
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2 align-top">
+                                                                    <input
+                                                                        type="hidden"
+                                                                        name={`students[${index}][first_name]`}
+                                                                        value={
+                                                                            row.first_name
+                                                                        }
+                                                                    />
+                                                                    <input
+                                                                        type="hidden"
+                                                                        name={`students[${index}][middle_name]`}
+                                                                        value={
+                                                                            row.middle_name
+                                                                        }
+                                                                    />
+                                                                    <input
+                                                                        type="hidden"
+                                                                        name={`students[${index}][last_name]`}
+                                                                        value={
+                                                                            row.last_name
+                                                                        }
+                                                                    />
+                                                                    {[
+                                                                        row.first_name,
+                                                                        row.middle_name,
+                                                                        row.last_name,
+                                                                    ]
+                                                                        .filter(
+                                                                            Boolean,
+                                                                        )
+                                                                        .join(
+                                                                            ' ',
+                                                                        )}
+                                                                    <InputError
+                                                                        message={
+                                                                            errors[
+                                                                                `students.${index}.first_name`
+                                                                            ] ??
+                                                                            errors[
+                                                                                `students.${index}.last_name`
+                                                                            ]
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2 align-top">
+                                                                    <input
+                                                                        type="hidden"
+                                                                        name={`students[${index}][section_id]`}
+                                                                        value={
+                                                                            row.section_id
+                                                                        }
+                                                                    />
+                                                                    {
+                                                                        row.section_label
+                                                                    }
+                                                                    <InputError
+                                                                        message={
+                                                                            errors[
+                                                                                `students.${index}.section_id`
+                                                                            ]
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2 align-top text-muted-foreground">
+                                                                    <input
+                                                                        type="hidden"
+                                                                        name={`students[${index}][email]`}
+                                                                        value={
+                                                                            row.email
+                                                                        }
+                                                                    />
+                                                                    {row.email}
+                                                                    <InputError
+                                                                        message={
+                                                                            errors[
+                                                                                `students.${index}.email`
+                                                                            ]
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="px-3 py-2 align-top">
+                                                                    {row.errors
+                                                                        .length >
+                                                                    0 ? (
+                                                                        <div className="space-y-1 text-xs text-red-600">
+                                                                            {row.errors.map(
+                                                                                (
+                                                                                    error,
+                                                                                ) => (
+                                                                                    <p
+                                                                                        key={
+                                                                                            error
+                                                                                        }
+                                                                                    >
+                                                                                        {
+                                                                                            error
+                                                                                        }
+                                                                                    </p>
+                                                                                ),
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-emerald-600">
+                                                                            Ready
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        ),
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {bulkImportRows.length === 0 && (
+                                    <div className="flex items-center justify-center rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                                        <div>
+                                            <FileSpreadsheet className="mx-auto mb-3 size-8 opacity-60" />
+                                            Download the template, fill in your
+                                            students, then upload the Excel
+                                            file here.
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="flex justify-end gap-2 pt-2">
                                     <Button
@@ -1011,12 +1196,12 @@ export default function DeanStudents({
                                     <Button
                                         type="submit"
                                         disabled={
-                                            processing || !bulkSectionId
+                                            processing || !canSubmitBulkImport
                                         }
                                         className="bg-brand text-brand-foreground hover:bg-brand-hover"
                                     >
                                         {processing && <Spinner />}
-                                        Create Students
+                                        Import Students
                                     </Button>
                                 </div>
                             </>

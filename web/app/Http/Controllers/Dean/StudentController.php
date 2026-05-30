@@ -70,7 +70,8 @@ class StudentController extends Controller
             foreach ($validated['students'] as $studentData) {
                 $this->createStudent([
                     ...$studentData,
-                    'section_id' => $validated['section_id'],
+                    'email' => $studentData['email'] ?? $this->generatedBulkEmail($studentData['student_number']),
+                    'section_id' => $studentData['section_id'] ?? $validated['section_id'],
                 ]);
 
                 $createdCount++;
@@ -191,6 +192,13 @@ class StudentController extends Controller
     private function fullName(string $firstName, ?string $middleName, string $lastName): string
     {
         return trim(collect([$firstName, $middleName, $lastName])->filter()->implode(' '));
+    }
+
+    private function generatedBulkEmail(string $studentNumber): string
+    {
+        $local = Str::lower((string) preg_replace('/[^a-zA-Z0-9.-]/', '', $studentNumber));
+
+        return "{$local}@students.occ.edu.ph";
     }
 
     private function deanCourse(Request $request): ?Course
