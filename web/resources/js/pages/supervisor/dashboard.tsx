@@ -1,22 +1,9 @@
-import { Form, Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { Building2, ClipboardList, Clock, Users } from 'lucide-react';
-import { useState } from 'react';
-import InputError from '@/components/input-error';
-import { AppModal } from '@/components/superadmin/app-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
-import { update as submitEvaluation } from '@/routes/supervisors/evaluations';
+import { show as showEvaluation } from '@/routes/supervisors/evaluations';
 import { dashboard as supervisorDashboard } from '@/routes/supervisors';
 import type { Auth } from '@/types';
 
@@ -31,6 +18,17 @@ type Progress = {
 type PendingEvaluation = {
     id: number;
     opened_at: string;
+    template: {
+        id: number;
+        name: string;
+        description: string | null;
+        items: {
+            id: number;
+            item_type: 'rating_question' | 'text_area';
+            label: string;
+            is_required: boolean;
+        }[];
+    } | null;
 };
 
 type InternRow = {
@@ -64,11 +62,6 @@ type Props = {
 
 export default function SupervisorDashboard() {
     const { auth, supervisor, stats, interns } = usePage<Props>().props;
-    const [evaluateIntern, setEvaluateIntern] = useState<InternRow | null>(null);
-    const [rating, setRating] = useState('3');
-    const [evaluationDate, setEvaluationDate] = useState(
-        new Date().toISOString().slice(0, 10),
-    );
 
     console.log('Supervisor dashboard loaded', {
         user: auth.user,
@@ -76,16 +69,6 @@ export default function SupervisorDashboard() {
         stats,
         internCount: interns.length,
     });
-
-    const openEvaluationModal = (intern: InternRow) => {
-        setEvaluateIntern(intern);
-        setRating('3');
-        setEvaluationDate(new Date().toISOString().slice(0, 10));
-        console.log('Supervisor evaluation modal opened', {
-            internId: intern.id,
-            evaluationId: intern.pending_evaluation?.id,
-        });
-    };
 
     return (
         <>
@@ -166,7 +149,7 @@ export default function SupervisorDashboard() {
                                 {stats.pending_evaluations}
                             </p>
                             <CardDescription className="mt-1">
-                                Awaiting your rating
+                                Awaiting your submission
                             </CardDescription>
                         </CardContent>
                     </Card>
@@ -318,9 +301,23 @@ export default function SupervisorDashboard() {
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     {intern.pending_evaluation ? (
-                                                        <Badge variant="secondary">
-                                                            Pending
-                                                        </Badge>
+                                                        <div>
+                                                            <Badge variant="secondary">
+                                                                Pending
+                                                            </Badge>
+                                                            {intern
+                                                                .pending_evaluation
+                                                                .template && (
+                                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                                    {
+                                                                        intern
+                                                                            .pending_evaluation
+                                                                            .template
+                                                                            .name
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     ) : (
                                                         <span className="text-muted-foreground">
                                                             —
@@ -330,15 +327,20 @@ export default function SupervisorDashboard() {
                                                 <td className="px-4 py-3 text-right">
                                                     {intern.pending_evaluation ? (
                                                         <Button
+                                                            asChild
                                                             size="sm"
                                                             className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                                                            onClick={() =>
-                                                                openEvaluationModal(
-                                                                    intern,
-                                                                )
-                                                            }
                                                         >
-                                                            Evaluate
+                                                            <Link
+                                                                href={showEvaluation(
+                                                                    intern
+                                                                        .pending_evaluation
+                                                                        .id,
+                                                                )}
+                                                                prefetch
+                                                            >
+                                                                Evaluate
+                                                            </Link>
                                                         </Button>
                                                     ) : (
                                                         <span className="text-xs text-muted-foreground">
@@ -355,126 +357,6 @@ export default function SupervisorDashboard() {
                     </CardContent>
                 </Card>
             </div>
-
-            {evaluateIntern?.pending_evaluation && (
-                <AppModal
-                    open={evaluateIntern !== null}
-                    onOpenChange={(open) => {
-                        if (!open) {
-                            setEvaluateIntern(null);
-                        }
-                    }}
-                    title={`Evaluate ${evaluateIntern.full_name}`}
-                    description="Provide a rating, comments, and evaluation date for this intern."
-                    className="sm:max-w-lg"
-                >
-                    <Form
-                        action={submitEvaluation(
-                            evaluateIntern.pending_evaluation.id,
-                        ).url}
-                        method={
-                            submitEvaluation(
-                                evaluateIntern.pending_evaluation.id,
-                            ).method
-                        }
-                        options={{ preserveScroll: true }}
-                        onSuccess={() => setEvaluateIntern(null)}
-                        className="space-y-4"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="rating">Rating</Label>
-                                    <input
-                                        type="hidden"
-                                        name="rating"
-                                        value={rating}
-                                    />
-                                    <Select
-                                        value={rating}
-                                        onValueChange={setRating}
-                                    >
-                                        <SelectTrigger id="rating">
-                                            <SelectValue placeholder="Select rating" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="5">
-                                                5 - Outstanding
-                                            </SelectItem>
-                                            <SelectItem value="4">
-                                                4 - Very Good
-                                            </SelectItem>
-                                            <SelectItem value="3">
-                                                3 - Satisfactory
-                                            </SelectItem>
-                                            <SelectItem value="2">
-                                                2 - Needs Improvement
-                                            </SelectItem>
-                                            <SelectItem value="1">
-                                                1 - Poor
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <InputError message={errors.rating} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="evaluation_date">
-                                        Evaluation Date
-                                    </Label>
-                                    <Input
-                                        id="evaluation_date"
-                                        type="date"
-                                        name="evaluation_date"
-                                        value={evaluationDate}
-                                        max={new Date()
-                                            .toISOString()
-                                            .slice(0, 10)}
-                                        onChange={(event) =>
-                                            setEvaluationDate(event.target.value)
-                                        }
-                                    />
-                                    <InputError
-                                        message={errors.evaluation_date}
-                                    />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="comments">Comments</Label>
-                                    <textarea
-                                        id="comments"
-                                        name="comments"
-                                        rows={4}
-                                        placeholder="Describe the intern's performance, strengths, and areas for improvement."
-                                        className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                                    />
-                                    <InputError message={errors.comments} />
-                                </div>
-
-                                <div className="flex justify-end gap-2 pt-2">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() =>
-                                            setEvaluateIntern(null)
-                                        }
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                                    >
-                                        {processing && <Spinner />}
-                                        Submit evaluation
-                                    </Button>
-                                </div>
-                            </>
-                        )}
-                    </Form>
-                </AppModal>
-            )}
         </>
     );
 }

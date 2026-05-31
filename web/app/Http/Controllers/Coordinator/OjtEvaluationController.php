@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Coordinator\Concerns\ResolvesCoordinatorCourse;
+use App\Http\Requests\Coordinator\OpenOjtEvaluationRequest;
 use App\Models\OjtEvaluation;
+use App\Models\OjtEvaluationTemplate;
 use App\Models\Section;
 use App\Models\Student;
 use Illuminate\Http\RedirectResponse;
@@ -13,8 +16,12 @@ use Inertia\Inertia;
 
 class OjtEvaluationController extends Controller
 {
-    public function store(Request $request, Student $student): RedirectResponse
-    {
+    use ResolvesCoordinatorCourse;
+
+    public function store(
+        OpenOjtEvaluationRequest $request,
+        Student $student,
+    ): RedirectResponse {
         $section = $this->coordinatorSectionOrFail($request);
         $this->ensureStudentInSection($student, $section);
 
@@ -31,20 +38,32 @@ class OjtEvaluationController extends Controller
 
         abort_if($hasPending, 422, 'This student already has a pending evaluation.');
 
-        $this->openEvaluation($student, $request->user()->id);
+        $template = OjtEvaluationTemplate::query()
+            ->where('id', $request->validated('evaluation_template_id'))
+            ->where('section_id', $section->id)
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        $this->openEvaluation($student, $request->user()->id, $template);
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => 'Evaluation opened. The company supervisor can now rate this intern.',
+            'message' => "“{$template->name}” sent to the company supervisor.",
         ]);
 
         return redirect()->back();
     }
 
-    public function storeAll(Request $request): RedirectResponse
+    public function storeAll(OpenOjtEvaluationRequest $request): RedirectResponse
     {
         $section = $this->coordinatorSectionOrFail($request);
         $userId = $request->user()->id;
+
+        $template = OjtEvaluationTemplate::query()
+            ->where('id', $request->validated('evaluation_template_id'))
+            ->where('section_id', $section->id)
+            ->where('is_active', true)
+            ->firstOrFail();
 
         $activeStudents = Student::query()
             ->where('section_id', $section->id)
@@ -77,9 +96,9 @@ class OjtEvaluationController extends Controller
             return redirect()->back();
         }
 
-        DB::transaction(function () use ($eligibleStudents, $userId): void {
+        DB::transaction(function () use ($eligibleStudents, $userId, $template): void {
             foreach ($eligibleStudents as $student) {
-                $this->openEvaluation($student, $userId);
+                $this->openEvaluation($student, $userId, $template);
             }
         });
 
@@ -87,7 +106,7 @@ class OjtEvaluationController extends Controller
         $skippedNoSupervisor = $activeStudents->whereNull('supervisor_id')->count();
         $skippedPending = $activeStudents->whereNotNull('supervisor_id')->count() - $openedCount;
 
-        $message = "Opened evaluations for {$openedCount} student(s).";
+        $message = "Opened “{$template->name}” for {$openedCount} student(s).";
 
         if ($skippedNoSupervisor > 0) {
             $message .= " {$skippedNoSupervisor} skipped (no supervisor assigned).";
@@ -105,28 +124,19 @@ class OjtEvaluationController extends Controller
         return redirect()->back();
     }
 
-    private function openEvaluation(Student $student, int $openedByUserId): void
-    {
+    private function openEvaluation(
+        Student $student,
+        int $openedByUserId,
+        OjtEvaluationTemplate $template,
+    ): void {
         OjtEvaluation::query()->create([
             'student_id' => $student->id,
             'supervisor_id' => $student->supervisor_id,
             'opened_by_user_id' => $openedByUserId,
+            'evaluation_template_id' => $template->id,
             'status' => OjtEvaluation::STATUS_PENDING,
             'opened_at' => now(),
         ]);
-    }
-
-    private function coordinatorSectionOrFail(Request $request): Section
-    {
-        $section = Section::query()
-            ->where('coordinator_user_id', $request->user()->id)
-            ->where('is_active', true)
-            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
-            ->first();
-
-        abort_if($section === null, 403, 'You are not assigned to a section yet.');
-
-        return $section;
     }
 
     private function ensureStudentInSection(Student $student, Section $section): void

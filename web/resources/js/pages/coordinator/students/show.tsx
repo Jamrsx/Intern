@@ -31,6 +31,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { index as evaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { index as studentsIndex, update } from '@/routes/coordinators/students';
 import { store as storeEvaluation } from '@/routes/coordinators/students/evaluations';
 
@@ -103,11 +104,28 @@ type DocumentRow = {
     download_url: string;
 };
 
+type EvaluationTemplateOption = {
+    id: number;
+    name: string;
+    description: string | null;
+    items_count: number;
+};
+
+type EvaluationResponse = {
+    item_id: number;
+    item_type: 'rating_question' | 'text_area';
+    label: string;
+    rating?: number;
+    text?: string;
+};
+
 type EvaluationRow = {
     id: number;
     status: 'pending' | 'completed';
+    template: { id: number; name: string } | null;
     rating: number | null;
     comments: string | null;
+    responses: EvaluationResponse[];
     evaluation_date: string | null;
     opened_at: string;
     submitted_at: string | null;
@@ -125,6 +143,7 @@ type Props = {
     companies: CompanyOption[];
     supervisors: SupervisorOption[];
     evaluations: EvaluationRow[];
+    evaluation_templates: EvaluationTemplateOption[];
     can_open_evaluation: boolean;
 };
 
@@ -165,9 +184,16 @@ export default function CoordinatorStudentShow() {
         companies,
         supervisors,
         evaluations,
+        evaluation_templates,
         can_open_evaluation,
     } = usePage<Props>().props;
     const [showAssignModal, setShowAssignModal] = useState(false);
+    const [showOpenEvaluationModal, setShowOpenEvaluationModal] = useState(false);
+    const [selectedEvaluationTemplateId, setSelectedEvaluationTemplateId] =
+        useState('');
+    const [openEvaluationError, setOpenEvaluationError] = useState<
+        string | null
+    >(null);
     const [openingEvaluation, setOpeningEvaluation] = useState(false);
     const [companyId, setCompanyId] = useState(
         student.company_id ? String(student.company_id) : 'none',
@@ -184,6 +210,7 @@ export default function CoordinatorStudentShow() {
         progress,
         documentCount: documents.length,
         evaluationCount: evaluations.length,
+        evaluationTemplateCount: evaluation_templates.length,
         can_open_evaluation,
     });
 
@@ -231,21 +258,41 @@ export default function CoordinatorStudentShow() {
         setShowAssignModal(true);
     };
 
+    const openEvaluationModal = () => {
+        if (evaluation_templates.length === 0) {
+            setOpenEvaluationError(
+                'Create an evaluation sheet first before opening an evaluation.',
+            );
+            setShowOpenEvaluationModal(true);
+            return;
+        }
+
+        setSelectedEvaluationTemplateId(
+            String(evaluation_templates[0]?.id ?? ''),
+        );
+        setOpenEvaluationError(null);
+        setShowOpenEvaluationModal(true);
+        console.log('Coordinator open evaluation modal opened', {
+            studentId: student.id,
+            templates: evaluation_templates.length,
+        });
+    };
+
     const handleOpenEvaluation = () => {
-        if (
-            !confirm(
-                `Open an OJT evaluation for ${student.full_name}? The assigned supervisor will be able to rate this intern.`,
-            )
-        ) {
+        if (!selectedEvaluationTemplateId) {
+            setOpenEvaluationError('Please select an evaluation sheet.');
             return;
         }
 
         setOpeningEvaluation(true);
         router.post(
             storeEvaluation(student.id).url,
-            {},
+            {
+                evaluation_template_id: Number(selectedEvaluationTemplateId),
+            },
             {
                 preserveScroll: true,
+                onSuccess: () => setShowOpenEvaluationModal(false),
                 onFinish: () => setOpeningEvaluation(false),
             },
         );
@@ -476,7 +523,7 @@ export default function CoordinatorStudentShow() {
                             {student.is_active && (
                                 <Button
                                     type="button"
-                                    onClick={handleOpenEvaluation}
+                                    onClick={openEvaluationModal}
                                     disabled={
                                         !can_open_evaluation || openingEvaluation
                                     }
@@ -522,6 +569,9 @@ export default function CoordinatorStudentShow() {
                                     <thead>
                                         <tr className="border-b bg-muted/40 text-left">
                                             <th className="px-4 py-3 font-medium">
+                                                Sheet
+                                            </th>
+                                            <th className="px-4 py-3 font-medium">
                                                 Status
                                             </th>
                                             <th className="px-4 py-3 font-medium">
@@ -531,10 +581,10 @@ export default function CoordinatorStudentShow() {
                                                 Rating
                                             </th>
                                             <th className="px-4 py-3 font-medium">
-                                                Evaluation date
+                                                Responses
                                             </th>
                                             <th className="px-4 py-3 font-medium">
-                                                Comments
+                                                Evaluation date
                                             </th>
                                             <th className="px-4 py-3 font-medium">
                                                 Opened
@@ -547,6 +597,13 @@ export default function CoordinatorStudentShow() {
                                                 key={evaluation.id}
                                                 className="border-b last:border-0"
                                             >
+                                                <td className="px-4 py-3">
+                                                    {evaluation.template?.name ?? (
+                                                        <span className="text-muted-foreground">
+                                                            Legacy
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3">
                                                     <Badge
                                                         variant={
@@ -574,13 +631,42 @@ export default function CoordinatorStudentShow() {
                                                 <td className="px-4 py-3">
                                                     {evaluation.rating ?? '—'}
                                                 </td>
+                                                <td className="max-w-sm px-4 py-3 text-muted-foreground">
+                                                    {evaluation.responses
+                                                        .length > 0 ? (
+                                                        <ul className="space-y-1">
+                                                            {evaluation.responses.map(
+                                                                (response) => (
+                                                                    <li
+                                                                        key={
+                                                                            response.item_id
+                                                                        }
+                                                                    >
+                                                                        <span className="font-medium text-foreground">
+                                                                            {
+                                                                                response.label
+                                                                            }
+                                                                            :
+                                                                        </span>{' '}
+                                                                        {response.item_type ===
+                                                                        'rating_question'
+                                                                            ? (response.rating ??
+                                                                              '—')
+                                                                            : (response.text ??
+                                                                              '—')}
+                                                                    </li>
+                                                                ),
+                                                            )}
+                                                        </ul>
+                                                    ) : (
+                                                        evaluation.comments ??
+                                                        '—'
+                                                    )}
+                                                </td>
                                                 <td className="px-4 py-3 text-muted-foreground">
                                                     {formatDate(
                                                         evaluation.evaluation_date,
                                                     )}
-                                                </td>
-                                                <td className="max-w-xs px-4 py-3 text-muted-foreground">
-                                                    {evaluation.comments ?? '—'}
                                                 </td>
                                                 <td className="px-4 py-3 text-muted-foreground">
                                                     {formatDate(
@@ -846,6 +932,107 @@ export default function CoordinatorStudentShow() {
                         </>
                     )}
                 </Form>
+            </AppModal>
+
+            <AppModal
+                open={showOpenEvaluationModal}
+                onOpenChange={setShowOpenEvaluationModal}
+                title="Open evaluation"
+                description={
+                    evaluation_templates.length === 0
+                        ? 'You need at least one active evaluation sheet.'
+                        : `Send an evaluation to ${student.supervisor?.name ?? 'the assigned supervisor'} for ${student.full_name}.`
+                }
+                className="sm:max-w-lg"
+            >
+                {evaluation_templates.length === 0 ? (
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            Build a reusable evaluation sheet first, then return
+                            here to open an evaluation for this intern.
+                        </p>
+                        {openEvaluationError && (
+                            <p className="text-sm text-destructive">
+                                {openEvaluationError}
+                            </p>
+                        )}
+                        <div className="flex justify-end gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                    setShowOpenEvaluationModal(false)
+                                }
+                            >
+                                Close
+                            </Button>
+                            <Button
+                                asChild
+                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                            >
+                                <Link href={evaluationTemplatesIndex()}>
+                                    Create evaluation sheet
+                                </Link>
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="open-evaluation-template">
+                                Evaluation sheet
+                            </Label>
+                            <Select
+                                value={selectedEvaluationTemplateId}
+                                onValueChange={(value) => {
+                                    setSelectedEvaluationTemplateId(value);
+                                    setOpenEvaluationError(null);
+                                }}
+                            >
+                                <SelectTrigger id="open-evaluation-template">
+                                    <SelectValue placeholder="Select a sheet" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {evaluation_templates.map((template) => (
+                                        <SelectItem
+                                            key={template.id}
+                                            value={String(template.id)}
+                                        >
+                                            {template.name}
+                                            {template.items_count > 0
+                                                ? ` (${template.items_count} items)`
+                                                : ''}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {openEvaluationError && (
+                                <InputError message={openEvaluationError} />
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                    setShowOpenEvaluationModal(false)
+                                }
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                disabled={openingEvaluation}
+                                onClick={handleOpenEvaluation}
+                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                            >
+                                {openingEvaluation && <Spinner />}
+                                Open evaluation
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </AppModal>
         </>
     );

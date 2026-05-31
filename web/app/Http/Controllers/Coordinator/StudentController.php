@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Coordinator\Concerns\FormatsEvaluationTemplates;
 use App\Http\Requests\Coordinator\UpdateStudentPlacementRequest;
 use App\Models\Company;
 use App\Models\OjtEvaluation;
@@ -20,6 +21,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class StudentController extends Controller
 {
+    use FormatsEvaluationTemplates;
     public function index(Request $request): Response
     {
         $section = $this->coordinatorSection($request);
@@ -29,6 +31,7 @@ class StudentController extends Controller
             'section' => $this->sectionPayload($section),
             'students' => $students,
             'evaluation_stats' => $this->evaluationStats($section),
+            'evaluation_templates' => $this->evaluationTemplateOptions($section),
         ]);
     }
 
@@ -73,6 +76,7 @@ class StudentController extends Controller
             'companies' => $this->companyOptions($section),
             'supervisors' => $this->supervisorOptions($section),
             'evaluations' => $this->evaluationList($student),
+            'evaluation_templates' => $this->evaluationTemplateOptions($section),
             'can_open_evaluation' => $student->supervisor_id !== null
                 && ! OjtEvaluation::query()
                     ->where('student_id', $student->id)
@@ -293,15 +297,20 @@ class StudentController extends Controller
     private function evaluationList(Student $student): array
     {
         return OjtEvaluation::query()
-            ->with(['supervisor.user:id,name'])
+            ->with(['supervisor.user:id,name', 'template:id,name'])
             ->where('student_id', $student->id)
             ->orderByDesc('opened_at')
             ->get()
             ->map(fn (OjtEvaluation $evaluation) => [
                 'id' => $evaluation->id,
                 'status' => $evaluation->status,
+                'template' => $evaluation->template ? [
+                    'id' => $evaluation->template->id,
+                    'name' => $evaluation->template->name,
+                ] : null,
                 'rating' => $evaluation->rating,
                 'comments' => $evaluation->comments,
+                'responses' => $evaluation->responses ?? [],
                 'evaluation_date' => $evaluation->evaluation_date?->toDateString(),
                 'opened_at' => $evaluation->opened_at->toIso8601String(),
                 'submitted_at' => $evaluation->submitted_at?->toIso8601String(),

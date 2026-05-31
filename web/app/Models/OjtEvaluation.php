@@ -18,9 +18,11 @@ class OjtEvaluation extends Model
         'student_id',
         'supervisor_id',
         'opened_by_user_id',
+        'evaluation_template_id',
         'status',
         'rating',
         'comments',
+        'responses',
         'evaluation_date',
         'opened_at',
         'submitted_at',
@@ -33,10 +35,19 @@ class OjtEvaluation extends Model
     {
         return [
             'rating' => 'integer',
+            'responses' => 'array',
             'evaluation_date' => 'date',
             'opened_at' => 'datetime',
             'submitted_at' => 'datetime',
         ];
+    }
+
+    /**
+     * @return BelongsTo<OjtEvaluationTemplate, $this>
+     */
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(OjtEvaluationTemplate::class, 'evaluation_template_id');
     }
 
     /**

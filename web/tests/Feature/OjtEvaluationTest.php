@@ -4,6 +4,7 @@ use App\Models\Company;
 use App\Models\Course;
 use App\Models\Department;
 use App\Models\OjtEvaluation;
+use App\Models\OjtEvaluationTemplate;
 use App\Models\Role;
 use App\Models\SchoolYear;
 use App\Models\Section;
@@ -84,12 +85,37 @@ function createSupervisorEvaluationContext(): array
         'is_active' => true,
     ]);
 
+    $template = OjtEvaluationTemplate::query()->create([
+        'section_id' => $section->id,
+        'created_by_user_id' => $coordinator->id,
+        'name' => 'Midterm Evaluation',
+        'description' => 'Midterm performance review',
+        'is_active' => true,
+    ]);
+
+    $ratingItem = $template->items()->create([
+        'sort_order' => 0,
+        'item_type' => 'rating_question',
+        'label' => 'Quality of work',
+        'is_required' => true,
+    ]);
+
+    $textItem = $template->items()->create([
+        'sort_order' => 1,
+        'item_type' => 'text_area',
+        'label' => 'Strengths and weaknesses',
+        'is_required' => true,
+    ]);
+
     return compact(
         'coordinator',
         'supervisorUser',
         'supervisor',
         'student',
         'section',
+        'template',
+        'ratingItem',
+        'textItem',
     );
 }
 
@@ -101,11 +127,14 @@ it('allows a coordinator to open an evaluation for an assigned student', functio
         'coordinator' => $coordinator,
         'supervisor' => $supervisor,
         'student' => $student,
+        'template' => $template,
     ] = createSupervisorEvaluationContext();
 
     $this->actingAs($coordinator)
         ->from(route('coordinators.students.show', $student))
-        ->post(route('coordinators.students.evaluations.store', $student))
+        ->post(route('coordinators.students.evaluations.store', $student), [
+            'evaluation_template_id' => $template->id,
+        ])
         ->assertRedirect(route('coordinators.students.show', $student));
 
     $evaluation = OjtEvaluation::query()->first();
@@ -113,6 +142,7 @@ it('allows a coordinator to open an evaluation for an assigned student', functio
     expect($evaluation)->not->toBeNull();
     expect($evaluation?->student_id)->toBe($student->id);
     expect($evaluation?->supervisor_id)->toBe($supervisor->id);
+    expect($evaluation?->evaluation_template_id)->toBe($template->id);
     expect($evaluation?->status)->toBe(OjtEvaluation::STATUS_PENDING);
     expect($evaluation?->opened_by_user_id)->toBe($coordinator->id);
 });
@@ -125,15 +155,33 @@ it('shows evaluations on the coordinator student detail page', function () {
         'coordinator' => $coordinator,
         'supervisorUser' => $supervisorUser,
         'student' => $student,
+        'template' => $template,
+        'ratingItem' => $ratingItem,
+        'textItem' => $textItem,
     ] = createSupervisorEvaluationContext();
 
     OjtEvaluation::query()->create([
         'student_id' => $student->id,
         'supervisor_id' => $student->supervisor_id,
         'opened_by_user_id' => $coordinator->id,
+        'evaluation_template_id' => $template->id,
         'status' => OjtEvaluation::STATUS_COMPLETED,
         'rating' => 4,
-        'comments' => 'Strong performance.',
+        'comments' => 'Strengths and weaknesses: Strong performance.',
+        'responses' => [
+            [
+                'item_id' => $ratingItem->id,
+                'item_type' => 'rating_question',
+                'label' => 'Quality of work',
+                'rating' => 4,
+            ],
+            [
+                'item_id' => $textItem->id,
+                'item_type' => 'text_area',
+                'label' => 'Strengths and weaknesses',
+                'text' => 'Strong performance.',
+            ],
+        ],
         'evaluation_date' => now()->toDateString(),
         'opened_at' => now()->subDay(),
         'submitted_at' => now(),
@@ -146,7 +194,7 @@ it('shows evaluations on the coordinator student detail page', function () {
             ->has('evaluations', 1)
             ->where('evaluations.0.status', OjtEvaluation::STATUS_COMPLETED)
             ->where('evaluations.0.rating', 4)
-            ->where('evaluations.0.comments', 'Strong performance.')
+            ->where('evaluations.0.template.name', 'Midterm Evaluation')
             ->where('can_open_evaluation', true));
 });
 
@@ -157,18 +205,22 @@ it('blocks opening a duplicate pending evaluation', function () {
     [
         'coordinator' => $coordinator,
         'student' => $student,
+        'template' => $template,
     ] = createSupervisorEvaluationContext();
 
     OjtEvaluation::query()->create([
         'student_id' => $student->id,
         'supervisor_id' => $student->supervisor_id,
         'opened_by_user_id' => $coordinator->id,
+        'evaluation_template_id' => $template->id,
         'status' => OjtEvaluation::STATUS_PENDING,
         'opened_at' => now(),
     ]);
 
     $this->actingAs($coordinator)
-        ->post(route('coordinators.students.evaluations.store', $student))
+        ->post(route('coordinators.students.evaluations.store', $student), [
+            'evaluation_template_id' => $template->id,
+        ])
         ->assertStatus(422);
 
     expect(OjtEvaluation::query()->count())->toBe(1);
@@ -182,21 +234,33 @@ it('allows a supervisor to submit a pending evaluation', function () {
         'coordinator' => $coordinator,
         'supervisorUser' => $supervisorUser,
         'student' => $student,
+        'template' => $template,
+        'ratingItem' => $ratingItem,
+        'textItem' => $textItem,
     ] = createSupervisorEvaluationContext();
 
     $evaluation = OjtEvaluation::query()->create([
         'student_id' => $student->id,
         'supervisor_id' => $student->supervisor_id,
         'opened_by_user_id' => $coordinator->id,
+        'evaluation_template_id' => $template->id,
         'status' => OjtEvaluation::STATUS_PENDING,
         'opened_at' => now(),
     ]);
 
     $this->actingAs($supervisorUser)
         ->patch(route('supervisors.evaluations.update', $evaluation), [
-            'rating' => 5,
-            'comments' => 'Excellent intern.',
             'evaluation_date' => now()->toDateString(),
+            'responses' => [
+                [
+                    'item_id' => $ratingItem->id,
+                    'rating' => 5,
+                ],
+                [
+                    'item_id' => $textItem->id,
+                    'text' => 'Excellent intern.',
+                ],
+            ],
         ])
         ->assertRedirect(route('supervisors.dashboard'));
 
@@ -204,7 +268,8 @@ it('allows a supervisor to submit a pending evaluation', function () {
 
     expect($evaluation->status)->toBe(OjtEvaluation::STATUS_COMPLETED);
     expect($evaluation->rating)->toBe(5);
-    expect($evaluation->comments)->toBe('Excellent intern.');
+    expect($evaluation->comments)->toContain('Excellent intern.');
+    expect($evaluation->responses)->toHaveCount(2);
     expect($evaluation->submitted_at)->not->toBeNull();
 });
 
@@ -216,12 +281,14 @@ it('shows pending evaluations on the supervisor dashboard', function () {
         'coordinator' => $coordinator,
         'supervisorUser' => $supervisorUser,
         'student' => $student,
+        'template' => $template,
     ] = createSupervisorEvaluationContext();
 
     OjtEvaluation::query()->create([
         'student_id' => $student->id,
         'supervisor_id' => $student->supervisor_id,
         'opened_by_user_id' => $coordinator->id,
+        'evaluation_template_id' => $template->id,
         'status' => OjtEvaluation::STATUS_PENDING,
         'opened_at' => now(),
     ]);
@@ -231,7 +298,8 @@ it('shows pending evaluations on the supervisor dashboard', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('stats.pending_evaluations', 1)
-            ->where('interns.0.pending_evaluation.id', OjtEvaluation::query()->value('id')));
+            ->where('interns.0.pending_evaluation.id', OjtEvaluation::query()->value('id'))
+            ->where('interns.0.pending_evaluation.template.name', 'Midterm Evaluation'));
 });
 
 it('allows a coordinator to open evaluations for all eligible students', function () {
@@ -242,6 +310,7 @@ it('allows a coordinator to open evaluations for all eligible students', functio
         'coordinator' => $coordinator,
         'student' => $student,
         'supervisor' => $supervisor,
+        'template' => $template,
     ] = createSupervisorEvaluationContext();
 
     $secondInternUser = User::factory()->create([
@@ -273,7 +342,9 @@ it('allows a coordinator to open evaluations for all eligible students', functio
 
     $this->actingAs($coordinator)
         ->from(route('coordinators.students.index'))
-        ->post(route('coordinators.students.evaluations.store-all'))
+        ->post(route('coordinators.students.evaluations.store-all'), [
+            'evaluation_template_id' => $template->id,
+        ])
         ->assertRedirect(route('coordinators.students.index'));
 
     expect(OjtEvaluation::query()->count())->toBe(2);
@@ -289,6 +360,9 @@ it('blocks supervisors from submitting another supervisors evaluation', function
         'coordinator' => $coordinator,
         'supervisorUser' => $supervisorUser,
         'student' => $student,
+        'template' => $template,
+        'ratingItem' => $ratingItem,
+        'textItem' => $textItem,
     ] = createSupervisorEvaluationContext();
 
     $otherSupervisorUser = User::factory()->create([
@@ -299,15 +373,105 @@ it('blocks supervisors from submitting another supervisors evaluation', function
         'student_id' => $student->id,
         'supervisor_id' => $student->supervisor_id,
         'opened_by_user_id' => $coordinator->id,
+        'evaluation_template_id' => $template->id,
         'status' => OjtEvaluation::STATUS_PENDING,
         'opened_at' => now(),
     ]);
 
     $this->actingAs($otherSupervisorUser)
         ->patch(route('supervisors.evaluations.update', $evaluation), [
-            'rating' => 3,
-            'comments' => 'Should not work.',
             'evaluation_date' => now()->toDateString(),
+            'responses' => [
+                [
+                    'item_id' => $ratingItem->id,
+                    'rating' => 3,
+                ],
+                [
+                    'item_id' => $textItem->id,
+                    'text' => 'Should not work.',
+                ],
+            ],
         ])
         ->assertForbidden();
+});
+
+it('allows a coordinator to create and manage section-private evaluation templates', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    [
+        'coordinator' => $coordinator,
+        'section' => $section,
+    ] = createSupervisorEvaluationContext();
+
+    $this->actingAs($coordinator)
+        ->post(route('coordinators.evaluation-templates.store'), [
+            'name' => 'Final Evaluation',
+            'description' => 'End-of-term review',
+            'items' => [
+                [
+                    'item_type' => 'rating_question',
+                    'label' => 'Overall performance',
+                    'is_required' => true,
+                ],
+            ],
+        ])
+        ->assertRedirect(route('coordinators.evaluation-templates.index'));
+
+    expect(
+        OjtEvaluationTemplate::query()
+            ->where('section_id', $section->id)
+            ->where('name', 'Final Evaluation')
+            ->exists(),
+    )->toBeTrue();
+
+    $otherCoordinator = User::factory()->create([
+        'role_id' => Role::query()->where('name', 'coordinator')->value('id'),
+    ]);
+
+    Section::query()->create([
+        'course_id' => $section->course_id,
+        'school_year_id' => $section->school_year_id,
+        'name' => '4B',
+        'coordinator_user_id' => $otherCoordinator->id,
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($otherCoordinator)
+        ->get(route('coordinators.evaluation-templates.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('templates', 0));
+});
+
+it('blocks editing an evaluation template after it has been sent', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    [
+        'coordinator' => $coordinator,
+        'student' => $student,
+        'template' => $template,
+    ] = createSupervisorEvaluationContext();
+
+    OjtEvaluation::query()->create([
+        'student_id' => $student->id,
+        'supervisor_id' => $student->supervisor_id,
+        'opened_by_user_id' => $coordinator->id,
+        'evaluation_template_id' => $template->id,
+        'status' => OjtEvaluation::STATUS_PENDING,
+        'opened_at' => now(),
+    ]);
+
+    $this->actingAs($coordinator)
+        ->put(route('coordinators.evaluation-templates.update', $template), [
+            'name' => 'Updated Name',
+            'items' => [
+                [
+                    'item_type' => 'rating_question',
+                    'label' => 'Updated question',
+                    'is_required' => true,
+                ],
+            ],
+        ])
+        ->assertStatus(422);
 });

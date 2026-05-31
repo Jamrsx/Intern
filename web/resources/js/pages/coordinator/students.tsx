@@ -1,6 +1,8 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Building2, ChevronDown, ClipboardList, Eye, Search, Users } from 'lucide-react';
 import { useLayoutEffect, useMemo, useState } from 'react';
+import InputError from '@/components/input-error';
+import { AppModal } from '@/components/superadmin/app-modal';
 import { PageHeader } from '@/components/superadmin/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,8 +13,17 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { index as evaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { storeAll as storeAllEvaluations } from '@/routes/coordinators/students/evaluations';
 import { index as studentsIndex, show } from '@/routes/coordinators/students';
 
@@ -50,6 +61,13 @@ type CompanyGroup = {
     students: StudentRow[];
 };
 
+type EvaluationTemplateOption = {
+    id: number;
+    name: string;
+    description: string | null;
+    items_count: number;
+};
+
 type Props = {
     section: Section;
     students: StudentRow[];
@@ -58,6 +76,7 @@ type Props = {
         pending: number;
         without_supervisor: number;
     };
+    evaluation_templates: EvaluationTemplateOption[];
 };
 
 const COMPANY_GROUP_STATE_KEY = 'coordinator-students-company-group-state';
@@ -93,9 +112,15 @@ function groupKey(companyId: number | null): string {
 }
 
 export default function CoordinatorStudents() {
-    const { section, students, evaluation_stats } = usePage<Props>().props;
+    const { section, students, evaluation_stats, evaluation_templates } =
+        usePage<Props>().props;
     const [search, setSearch] = useState('');
     const [openingAllEvaluations, setOpeningAllEvaluations] = useState(false);
+    const [showBulkEvaluationModal, setShowBulkEvaluationModal] = useState(false);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [bulkEvaluationError, setBulkEvaluationError] = useState<
+        string | null
+    >(null);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const [hasLoadedGroupState, setHasLoadedGroupState] = useState(false);
 
@@ -110,6 +135,7 @@ export default function CoordinatorStudents() {
         section,
         studentCount: students.length,
         evaluation_stats,
+        evaluationTemplateCount: evaluation_templates.length,
     });
 
     const filteredStudents = useMemo(() => {
@@ -198,25 +224,43 @@ export default function CoordinatorStudents() {
         });
     };
 
-    const handleSendEvaluationToAll = () => {
+    const openBulkEvaluationModal = () => {
         if (evaluation_stats.eligible === 0) {
             return;
         }
 
-        if (
-            !confirm(
-                `Open evaluations for ${evaluation_stats.eligible} student(s)? Each assigned supervisor will be able to rate their intern.`,
-            )
-        ) {
+        if (evaluation_templates.length === 0) {
+            setBulkEvaluationError(
+                'Create an evaluation sheet first before sending evaluations.',
+            );
+            setShowBulkEvaluationModal(true);
+            return;
+        }
+
+        setSelectedTemplateId(String(evaluation_templates[0]?.id ?? ''));
+        setBulkEvaluationError(null);
+        setShowBulkEvaluationModal(true);
+        console.log('Coordinator bulk evaluation modal opened', {
+            eligible: evaluation_stats.eligible,
+            templates: evaluation_templates.length,
+        });
+    };
+
+    const handleSendEvaluationToAll = () => {
+        if (!selectedTemplateId) {
+            setBulkEvaluationError('Please select an evaluation sheet.');
             return;
         }
 
         setOpeningAllEvaluations(true);
         router.post(
             storeAllEvaluations().url,
-            {},
+            {
+                evaluation_template_id: Number(selectedTemplateId),
+            },
             {
                 preserveScroll: true,
+                onSuccess: () => setShowBulkEvaluationModal(false),
                 onFinish: () => setOpeningAllEvaluations(false),
             },
         );
@@ -239,7 +283,7 @@ export default function CoordinatorStudents() {
                     action={
                         <Button
                             type="button"
-                            onClick={handleSendEvaluationToAll}
+                            onClick={openBulkEvaluationModal}
                             disabled={
                                 evaluation_stats.eligible === 0 ||
                                 openingAllEvaluations
@@ -549,6 +593,109 @@ export default function CoordinatorStudents() {
                     </>
                 )}
             </div>
+
+            <AppModal
+                open={showBulkEvaluationModal}
+                onOpenChange={setShowBulkEvaluationModal}
+                title="Send evaluation to all"
+                description={
+                    evaluation_templates.length === 0
+                        ? 'You need at least one active evaluation sheet.'
+                        : `Open an evaluation for ${evaluation_stats.eligible} eligible student(s). Each assigned supervisor will receive the selected sheet.`
+                }
+                className="sm:max-w-lg"
+            >
+                {evaluation_templates.length === 0 ? (
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            Build a reusable evaluation sheet with rating
+                            questions and text areas, then return here to send
+                            it to supervisors.
+                        </p>
+                        {bulkEvaluationError && (
+                            <p className="text-sm text-destructive">
+                                {bulkEvaluationError}
+                            </p>
+                        )}
+                        <div className="flex justify-end gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                    setShowBulkEvaluationModal(false)
+                                }
+                            >
+                                Close
+                            </Button>
+                            <Button
+                                asChild
+                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                            >
+                                <Link href={evaluationTemplatesIndex()}>
+                                    Create evaluation sheet
+                                </Link>
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="bulk-evaluation-template">
+                                Evaluation sheet
+                            </Label>
+                            <Select
+                                value={selectedTemplateId}
+                                onValueChange={(value) => {
+                                    setSelectedTemplateId(value);
+                                    setBulkEvaluationError(null);
+                                }}
+                            >
+                                <SelectTrigger id="bulk-evaluation-template">
+                                    <SelectValue placeholder="Select a sheet" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {evaluation_templates.map((template) => (
+                                        <SelectItem
+                                            key={template.id}
+                                            value={String(template.id)}
+                                        >
+                                            {template.name}
+                                            {template.items_count > 0
+                                                ? ` (${template.items_count} items)`
+                                                : ''}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {bulkEvaluationError && (
+                                <InputError message={bulkEvaluationError} />
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                    setShowBulkEvaluationModal(false)
+                                }
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                disabled={openingAllEvaluations}
+                                onClick={handleSendEvaluationToAll}
+                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                            >
+                                {openingAllEvaluations && <Spinner />}
+                                Send to {evaluation_stats.eligible} student
+                                {evaluation_stats.eligible === 1 ? '' : 's'}
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </AppModal>
         </>
     );
 }

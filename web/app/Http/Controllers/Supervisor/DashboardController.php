@@ -37,7 +37,7 @@ class DashboardController extends Controller
                 ->with([
                     'section.course:id,code,name,required_hours',
                     'section.schoolYear:id,name',
-                    'pendingOjtEvaluation:id,student_id,status,opened_at',
+                    'pendingOjtEvaluation.template.items',
                 ])
                 ->orderBy('last_name')
                 ->orderBy('first_name')
@@ -68,6 +68,17 @@ class DashboardController extends Controller
                     'pending_evaluation' => $pendingEvaluation ? [
                         'id' => $pendingEvaluation->id,
                         'opened_at' => $pendingEvaluation->opened_at->toIso8601String(),
+                        'template' => $pendingEvaluation->template ? [
+                            'id' => $pendingEvaluation->template->id,
+                            'name' => $pendingEvaluation->template->name,
+                            'description' => $pendingEvaluation->template->description,
+                            'items' => $pendingEvaluation->template->items->map(fn ($item) => [
+                                'id' => $item->id,
+                                'item_type' => $item->item_type,
+                                'label' => $item->label,
+                                'is_required' => $item->is_required,
+                            ])->values()->all(),
+                        ] : null,
                     ] : null,
                 ];
             }

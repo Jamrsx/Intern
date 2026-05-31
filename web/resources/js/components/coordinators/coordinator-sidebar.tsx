@@ -2,6 +2,7 @@ import { Link } from '@inertiajs/react';
 import {
     Building2,
     Briefcase,
+    ClipboardList,
     LayoutGrid,
     Users,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes/coordinators';
 import { index as coordinatorCompaniesIndex } from '@/routes/coordinators/companies';
+import { index as coordinatorEvaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { index as coordinatorStudentsIndex } from '@/routes/coordinators/students';
 import { index as coordinatorSupervisorsIndex } from '@/routes/coordinators/supervisors';
 import type { NavGroup } from '@/types';
@@ -41,6 +43,11 @@ const navGroups: NavGroup[] = [
                 title: 'Students',
                 href: coordinatorStudentsIndex(),
                 icon: Users,
+            },
+            {
+                title: 'Evaluation Sheets',
+                href: coordinatorEvaluationTemplatesIndex(),
+                icon: ClipboardList,
             },
         ],
     },

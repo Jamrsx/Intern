@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Coordinator\CompanyController as CoordinatorCompanyController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\EvaluationTemplateController as CoordinatorEvaluationTemplateController;
 use App\Http\Controllers\Coordinator\OjtEvaluationController as CoordinatorOjtEvaluationController;
 use App\Http\Controllers\Coordinator\StudentController as CoordinatorStudentController;
 use App\Http\Controllers\Coordinator\SupervisorController as CoordinatorSupervisorController;
@@ -104,6 +105,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('students/evaluations/bulk', [CoordinatorOjtEvaluationController::class, 'storeAll'])
                 ->name('students.evaluations.store-all');
 
+            Route::resource('evaluation-templates', CoordinatorEvaluationTemplateController::class)
+                ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
+
             Route::get('companies/deactivated', [CoordinatorCompanyController::class, 'deactivated'])
                 ->name('companies.deactivated');
             Route::patch('companies/{company}/reactivate', [CoordinatorCompanyController::class, 'reactivate'])
@@ -130,6 +134,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('dashboard', [SupervisorDashboardController::class, 'index'])
                 ->name('dashboard');
 
+            Route::get('evaluations/{evaluation}', [SupervisorOjtEvaluationController::class, 'show'])
+                ->name('evaluations.show');
             Route::patch('evaluations/{evaluation}', [SupervisorOjtEvaluationController::class, 'update'])
                 ->name('evaluations.update');
         });
