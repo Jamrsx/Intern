@@ -24,14 +24,14 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import { index as deanCompaniesIndex } from '@/routes/deans/companies';
+import { index as coordinatorCompaniesIndex } from '@/routes/coordinators/companies';
 import {
     destroy,
-    index as deanSupervisorsIndex,
+    index as coordinatorSupervisorsIndex,
     mailCredentials,
     store,
     update,
-} from '@/routes/deans/supervisors';
+} from '@/routes/coordinators/supervisors';
 
 type CompanyOption = {
     id: number;
@@ -63,7 +63,7 @@ type Props = {
     supervisors: SupervisorRow[];
 };
 
-const SUPERVISOR_GROUP_STATE_KEY = 'dean-supervisors-group-state';
+const SUPERVISOR_GROUP_STATE_KEY = 'coordinator-supervisors-group-state';
 
 function readStoredSupervisorGroupState(): Record<number, boolean> {
     if (typeof window === 'undefined') {
@@ -163,7 +163,7 @@ function DepartmentSelect({
     );
 }
 
-export default function DeanSupervisors({ companies, supervisors }: Props) {
+export default function CoordinatorSupervisors({ companies, supervisors }: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editSupervisor, setEditSupervisor] = useState<SupervisorRow | null>(
         null,
@@ -186,10 +186,10 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
         const storedState = readStoredSupervisorGroupState();
         setOpenGroups(storedState);
         setHasLoadedGroupState(true);
-        console.log('Dean supervisors group state restored', storedState);
+        console.log('Coordinator supervisors group state restored', storedState);
     }, []);
 
-    console.log('Dean Supervisors page loaded', {
+    console.log('Coordinator Supervisors page loaded', {
         companiesCount: companies.length,
         supervisorsCount: supervisors.length,
     });
@@ -264,7 +264,7 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
             };
 
             persistSupervisorGroupState(next);
-            console.log('Dean supervisors group state saved', next);
+            console.log('Coordinator supervisors group state saved', next);
 
             return next;
         });
@@ -307,7 +307,7 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
             return;
         }
 
-        console.log('Dean mail supervisor credentials', {
+        console.log('Coordinator mail supervisor credentials', {
             supervisorId: supervisor.id,
             email: supervisor.email,
         });
@@ -330,7 +330,7 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
                     title="Supervisors"
                     description="Create supervisor accounts and assign them to company departments."
                     icon={BookOpen}
-                    badgeText="Dean"
+                    badgeText="Coordinator"
                     action={
                         canManageSupervisors ? (
                             <Button
@@ -349,7 +349,7 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
                         <CardContent className="py-8 text-center text-sm text-muted-foreground">
                             No active companies found.{' '}
                             <Link
-                                href={deanCompaniesIndex().url}
+                                href={coordinatorCompaniesIndex().url}
                                 className="text-brand underline-offset-4 hover:underline"
                             >
                                 Create a company first
@@ -857,6 +857,6 @@ export default function DeanSupervisors({ companies, supervisors }: Props) {
     );
 }
 
-DeanSupervisors.layout = {
-    breadcrumbs: [{ title: 'Supervisors', href: deanSupervisorsIndex().url }],
+CoordinatorSupervisors.layout = {
+    breadcrumbs: [{ title: 'Supervisors', href: coordinatorSupervisorsIndex().url }],
 };

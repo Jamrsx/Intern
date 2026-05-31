@@ -1,29 +1,18 @@
 <?php
 
-namespace App\Http\Requests\Dean;
+namespace App\Http\Requests\Coordinator;
 
-use App\Models\Supervisor;
+use App\Http\Requests\Coordinator\Concerns\AuthorizesCoordinatorCourse;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class UpdateSupervisorRequest extends FormRequest
+class StoreSupervisorRequest extends FormRequest
 {
+    use AuthorizesCoordinatorCourse;
+
     public function authorize(): bool
     {
-        if (! ($this->user()?->hasRole('dean') ?? false)) {
-            return false;
-        }
-
-        $courseId = $this->user()?->courseAsDean?->id;
-        $supervisor = $this->route('supervisor');
-
-        if (! $supervisor instanceof Supervisor || $courseId === null) {
-            return false;
-        }
-
-        $supervisor->loadMissing('company');
-
-        return $supervisor->company?->course_id === $courseId;
+        return $this->isCoordinatorWithCourse();
     }
 
     /**
@@ -31,19 +20,11 @@ class UpdateSupervisorRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var Supervisor $supervisor */
-        $supervisor = $this->route('supervisor');
-        $courseId = $this->user()?->courseAsDean?->id;
+        $courseId = $this->coordinatorCourseId();
 
         return [
             'name' => ['required', 'string', 'max:150'],
-            'email' => [
-                'required',
-                'string',
-                'email',
-                'max:255',
-                Rule::unique('users', 'email')->ignore($supervisor->user_id),
-            ],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'company_id' => [
                 'required',
                 'integer',
@@ -63,7 +44,14 @@ class UpdateSupervisorRequest extends FormRequest
                 }),
             ],
             'position_title' => ['nullable', 'string', 'max:100'],
-            'is_active' => ['sometimes', 'boolean'],
+            'password' => [
+                Rule::requiredIf(fn () => ! $this->boolean('send_credentials_email')),
+                'nullable',
+                'string',
+                'min:8',
+                'max:255',
+            ],
+            'send_credentials_email' => ['sometimes', 'boolean'],
         ];
     }
 

@@ -11,7 +11,7 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { index as deanCompaniesIndex, reactivate } from '@/routes/deans/companies';
+import { index as coordinatorCompaniesIndex, reactivate } from '@/routes/coordinators/companies';
 
 type DepartmentRow = {
     id: number;
@@ -38,7 +38,7 @@ type Props = {
     companies: CompanyRow[];
 };
 
-const DEACTIVATED_GROUP_STATE_KEY = 'dean-deactivated-companies-group-state';
+const DEACTIVATED_GROUP_STATE_KEY = 'coordinator-deactivated-companies-group-state';
 
 function readStoredGroupState(): Record<number, boolean> {
     if (typeof window === 'undefined') {
@@ -70,7 +70,7 @@ function persistGroupState(state: Record<number, boolean>): void {
     localStorage.setItem(DEACTIVATED_GROUP_STATE_KEY, JSON.stringify(state));
 }
 
-export default function DeanDeactivatedCompanies({ companies }: Props) {
+export default function CoordinatorDeactivatedCompanies({ companies }: Props) {
     const [openGroups, setOpenGroups] = useState<Record<number, boolean>>({});
     const [hasLoadedGroupState, setHasLoadedGroupState] = useState(false);
 
@@ -78,10 +78,10 @@ export default function DeanDeactivatedCompanies({ companies }: Props) {
         const storedState = readStoredGroupState();
         setOpenGroups(storedState);
         setHasLoadedGroupState(true);
-        console.log('Dean deactivated companies group state restored', storedState);
+        console.log('Coordinator deactivated companies group state restored', storedState);
     }, []);
 
-    console.log('Dean Deactivated Companies page loaded', {
+    console.log('Coordinator Deactivated Companies page loaded', {
         count: companies.length,
     });
 
@@ -110,7 +110,7 @@ export default function DeanDeactivatedCompanies({ companies }: Props) {
             };
 
             persistGroupState(next);
-            console.log('Dean deactivated companies group state saved', next);
+            console.log('Coordinator deactivated companies group state saved', next);
 
             return next;
         });
@@ -137,10 +137,10 @@ export default function DeanDeactivatedCompanies({ companies }: Props) {
                     title="Deactivated Companies"
                     description="Review and restore OJT companies that were previously deactivated."
                     icon={Building2}
-                    badgeText="Dean"
+                    badgeText="Coordinator"
                     action={
                         <Button variant="outline" asChild>
-                            <Link href={deanCompaniesIndex().url}>
+                            <Link href={coordinatorCompaniesIndex().url}>
                                 <ArrowLeft className="mr-2 size-4" />
                                 Back to Companies
                             </Link>

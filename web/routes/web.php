@@ -1,15 +1,15 @@
 <?php
 
+use App\Http\Controllers\Coordinator\CompanyController as CoordinatorCompanyController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
 use App\Http\Controllers\Coordinator\OjtEvaluationController as CoordinatorOjtEvaluationController;
 use App\Http\Controllers\Coordinator\StudentController as CoordinatorStudentController;
-use App\Http\Controllers\Dean\CompanyController as DeanCompanyController;
+use App\Http\Controllers\Coordinator\SupervisorController as CoordinatorSupervisorController;
 use App\Http\Controllers\Dean\CoordinatorController as DeanCoordinatorController;
 use App\Http\Controllers\Dean\DashboardController as DeanDashboardController;
 use App\Http\Controllers\Dean\SchoolYearController as DeanSchoolYearController;
 use App\Http\Controllers\Dean\SectionController as DeanSectionController;
 use App\Http\Controllers\Dean\StudentController as DeanStudentController;
-use App\Http\Controllers\Dean\SupervisorController as DeanSupervisorController;
 use App\Http\Controllers\SuperAdmin\CourseController as SuperAdminCourseController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\DeanController as SuperAdminDeanController;
@@ -78,28 +78,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('students.mail-credentials');
             Route::resource('students', DeanStudentController::class)
                 ->except(['show', 'create', 'edit']);
-            Route::get('companies/deactivated', [DeanCompanyController::class, 'deactivated'])
-                ->name('companies.deactivated');
-            Route::patch('companies/{company}/reactivate', [DeanCompanyController::class, 'reactivate'])
-                ->name('companies.reactivate');
-            Route::resource('companies', DeanCompanyController::class)
-                ->except(['show', 'create', 'edit']);
-            Route::post('companies/{company}/departments', [DeanCompanyController::class, 'storeDepartment'])
-                ->name('companies.departments.store');
-            Route::patch('companies/{company}/departments/{department}', [DeanCompanyController::class, 'updateDepartment'])
-                ->name('companies.departments.update');
-            Route::delete('companies/{company}/departments/{department}', [DeanCompanyController::class, 'destroyDepartment'])
-                ->name('companies.departments.destroy');
             Route::resource('sections', DeanSectionController::class)
                 ->except(['show', 'create', 'edit']);
             Route::resource('coordinators', DeanCoordinatorController::class)
                 ->except(['show', 'create', 'edit']);
             Route::post('coordinators/{coordinator}/mail-credentials', [DeanCoordinatorController::class, 'mailCredentials'])
                 ->name('coordinators.mail-credentials');
-            Route::resource('supervisors', DeanSupervisorController::class)
-                ->except(['show', 'create', 'edit']);
-            Route::post('supervisors/{supervisor}/mail-credentials', [DeanSupervisorController::class, 'mailCredentials'])
-                ->name('supervisors.mail-credentials');
         });
 
     Route::middleware('coordinator')
@@ -119,6 +103,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('students.evaluations.store');
             Route::post('students/evaluations/bulk', [CoordinatorOjtEvaluationController::class, 'storeAll'])
                 ->name('students.evaluations.store-all');
+
+            Route::get('companies/deactivated', [CoordinatorCompanyController::class, 'deactivated'])
+                ->name('companies.deactivated');
+            Route::patch('companies/{company}/reactivate', [CoordinatorCompanyController::class, 'reactivate'])
+                ->name('companies.reactivate');
+            Route::resource('companies', CoordinatorCompanyController::class)
+                ->except(['show', 'create', 'edit']);
+            Route::post('companies/{company}/departments', [CoordinatorCompanyController::class, 'storeDepartment'])
+                ->name('companies.departments.store');
+            Route::patch('companies/{company}/departments/{department}', [CoordinatorCompanyController::class, 'updateDepartment'])
+                ->name('companies.departments.update');
+            Route::delete('companies/{company}/departments/{department}', [CoordinatorCompanyController::class, 'destroyDepartment'])
+                ->name('companies.departments.destroy');
+
+            Route::resource('supervisors', CoordinatorSupervisorController::class)
+                ->except(['show', 'create', 'edit']);
+            Route::post('supervisors/{supervisor}/mail-credentials', [CoordinatorSupervisorController::class, 'mailCredentials'])
+                ->name('supervisors.mail-credentials');
         });
 
     Route::middleware('supervisor')

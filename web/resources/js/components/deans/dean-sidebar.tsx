@@ -1,7 +1,5 @@
 import { Link } from '@inertiajs/react';
 import {
-    Building2,
-    Briefcase,
     CalendarDays,
     LayoutGrid,
     ListChecks,
@@ -22,11 +20,9 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes/deans';
 import { index as deanCoordinatorsIndex } from '@/routes/deans/coordinators';
-import { index as deanCompaniesIndex } from '@/routes/deans/companies';
 import { index as deanSchoolYearsIndex } from '@/routes/deans/school-years';
 import { index as deanSectionsIndex } from '@/routes/deans/sections';
 import { index as deanStudentsIndex } from '@/routes/deans/students';
-import { index as deanSupervisorsIndex } from '@/routes/deans/supervisors';
 import type { NavGroup } from '@/types';
 
 const navGroups: NavGroup[] = [
@@ -67,21 +63,6 @@ const navGroups: NavGroup[] = [
                 title: 'Coordinators',
                 href: deanCoordinatorsIndex(),
                 icon: UserCog,
-            },
-        ],
-    },
-    {
-        label: 'OJT Partners',
-        items: [
-            {
-                title: 'Companies',
-                href: deanCompaniesIndex(),
-                icon: Building2,
-            },
-            {
-                title: 'Supervisors',
-                href: deanSupervisorsIndex(),
-                icon: Briefcase,
             },
         ],
     },

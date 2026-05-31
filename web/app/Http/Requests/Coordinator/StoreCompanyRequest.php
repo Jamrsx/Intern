@@ -1,16 +1,18 @@
 <?php
 
-namespace App\Http\Requests\Dean;
+namespace App\Http\Requests\Coordinator;
 
+use App\Http\Requests\Coordinator\Concerns\AuthorizesCoordinatorCourse;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreCompanyRequest extends FormRequest
 {
+    use AuthorizesCoordinatorCourse;
+
     public function authorize(): bool
     {
-        return ($this->user()?->hasRole('dean') ?? false)
-            && $this->user()?->courseAsDean !== null;
+        return $this->isCoordinatorWithCourse();
     }
 
     /**
@@ -18,7 +20,7 @@ class StoreCompanyRequest extends FormRequest
      */
     public function rules(): array
     {
-        $courseId = $this->user()?->courseAsDean?->id;
+        $courseId = $this->coordinatorCourseId();
 
         return [
             'name' => [

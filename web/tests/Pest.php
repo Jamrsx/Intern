@@ -44,7 +44,57 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+use App\Models\Course;
+use App\Models\Role;
+use App\Models\SchoolYear;
+use App\Models\Section;
+use App\Models\Student;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+
+function createCoordinatorWithSection(): array
 {
-    // ..
+    $coordinatorRoleId = Role::query()->where('name', 'coordinator')->value('id');
+    $internRoleId = Role::query()->where('name', 'intern')->value('id');
+    $schoolYear = SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
+
+    $course = Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => User::factory()->create([
+            'role_id' => Role::query()->where('name', 'dean')->value('id'),
+        ])->id,
+        'is_active' => true,
+    ]);
+
+    $coordinator = User::factory()->create([
+        'role_id' => $coordinatorRoleId,
+    ]);
+
+    $section = Section::query()->create([
+        'course_id' => $course->id,
+        'school_year_id' => $schoolYear->id,
+        'name' => '4A',
+        'coordinator_user_id' => $coordinator->id,
+        'is_active' => true,
+    ]);
+
+    $studentUser = User::factory()->create([
+        'role_id' => $internRoleId,
+        'email' => 'intern.one@gmail.com',
+        'password' => Hash::make('password'),
+    ]);
+
+    $student = Student::query()->create([
+        'user_id' => $studentUser->id,
+        'student_number' => '2022-1-04311',
+        'first_name' => 'John',
+        'middle_name' => 'Michael',
+        'last_name' => 'Doe',
+        'section_id' => $section->id,
+        'is_active' => true,
+    ]);
+
+    return compact('coordinator', 'section', 'student', 'course');
 }

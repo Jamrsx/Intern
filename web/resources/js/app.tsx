@@ -7,6 +7,7 @@ import AuthLayout from '@/layouts/auth-layout';
 import CoordinatorLayout from '@/layouts/coordinator-layout';
 import DeanLayout from '@/layouts/dean-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import SuperAdminLayout from '@/layouts/superadmin-layout';
 import SupervisorLayout from '@/layouts/supervisor-layout';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';

@@ -51,6 +51,20 @@ class User extends Authenticatable implements OAuthenticatable
         return $this->hasMany(Section::class, 'coordinator_user_id');
     }
 
+    public function activeCoordinatorSection(): ?Section
+    {
+        return $this->coordinatedSections()
+            ->where('is_active', true)
+            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
+            ->with('course')
+            ->first();
+    }
+
+    public function coordinatorCourse(): ?Course
+    {
+        return $this->activeCoordinatorSection()?->course;
+    }
+
     /**
      * Get the attributes that should be cast.
      *

@@ -13,6 +13,7 @@ class Company extends Model
      */
     protected $fillable = [
         'course_id',
+        'section_id',
         'name',
         'address',
         'contact_person',
@@ -37,6 +38,14 @@ class Company extends Model
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
+    }
+
+    /**
+     * @return BelongsTo<Section, $this>
+     */
+    public function section(): BelongsTo
+    {
+        return $this->belongsTo(Section::class);
     }
 
     /**

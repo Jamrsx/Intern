@@ -1,7 +1,12 @@
 import { Link } from '@inertiajs/react';
+import {
+    Building2,
+    Briefcase,
+    LayoutGrid,
+    Users,
+} from 'lucide-react';
 import { BrandLogoMark } from '@/components/brand-logo-mark';
-import { LayoutGrid, Users } from 'lucide-react';
-import { NavMain } from '@/components/nav-main';
+import { NavGrouped } from '@/components/nav-grouped';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -13,23 +18,54 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes/coordinators';
+import { index as coordinatorCompaniesIndex } from '@/routes/coordinators/companies';
 import { index as coordinatorStudentsIndex } from '@/routes/coordinators/students';
-import type { NavItem } from '@/types';
+import { index as coordinatorSupervisorsIndex } from '@/routes/coordinators/supervisors';
+import type { NavGroup } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const navGroups: NavGroup[] = [
     {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
+        label: 'Overview',
+        items: [
+            {
+                title: 'Dashboard',
+                href: dashboard(),
+                icon: LayoutGrid,
+            },
+        ],
     },
     {
-        title: 'Students',
-        href: coordinatorStudentsIndex(),
-        icon: Users,
+        label: 'Interns',
+        items: [
+            {
+                title: 'Students',
+                href: coordinatorStudentsIndex(),
+                icon: Users,
+            },
+        ],
+    },
+    {
+        label: 'OJT Partners',
+        items: [
+            {
+                title: 'Companies',
+                href: coordinatorCompaniesIndex(),
+                icon: Building2,
+            },
+            {
+                title: 'Supervisors',
+                href: coordinatorSupervisorsIndex(),
+                icon: Briefcase,
+            },
+        ],
     },
 ];
 
 export function CoordinatorSidebar() {
+    console.log('Coordinator sidebar nav groups loaded', {
+        groups: navGroups.map((group) => group.label),
+    });
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -53,7 +89,7 @@ export function CoordinatorSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavGrouped groups={navGroups} />
             </SidebarContent>
 
             <SidebarFooter>

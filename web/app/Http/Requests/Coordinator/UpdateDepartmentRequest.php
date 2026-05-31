@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Requests\Dean;
+namespace App\Http\Requests\Coordinator;
 
+use App\Http\Requests\Coordinator\Concerns\AuthorizesCoordinatorCourse;
 use App\Models\Company;
 use App\Models\Department;
 use Illuminate\Foundation\Http\FormRequest;
@@ -9,20 +10,21 @@ use Illuminate\Validation\Rule;
 
 class UpdateDepartmentRequest extends FormRequest
 {
+    use AuthorizesCoordinatorCourse;
+
     public function authorize(): bool
     {
-        if (! ($this->user()?->hasRole('dean') ?? false)) {
+        if (! $this->isCoordinatorWithCourse()) {
             return false;
         }
 
-        $courseId = $this->user()?->courseAsDean?->id;
         $company = $this->route('company');
 
-        if (! $company instanceof Company || $courseId === null) {
+        if (! $company instanceof Company) {
             return false;
         }
 
-        return $company->course_id === $courseId;
+        return $company->course_id === $this->coordinatorCourseId();
     }
 
     /**

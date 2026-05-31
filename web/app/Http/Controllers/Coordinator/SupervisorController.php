@@ -1,14 +1,16 @@
 <?php
 
-namespace App\Http\Controllers\Dean;
+namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\Controller;
-use App\Http\Controllers\Dean\Concerns\ResolvesDeanCourse;
-use App\Http\Requests\Dean\StoreSupervisorRequest;
-use App\Http\Requests\Dean\UpdateSupervisorRequest;
+use App\Http\Controllers\Coordinator\Concerns\ResolvesCoordinatorCourse;
+use App\Http\Requests\Coordinator\StoreSupervisorRequest;
+use App\Http\Requests\Coordinator\UpdateSupervisorRequest;
 use App\Mail\SupervisorAccountCredentialsMail;
 use App\Models\Company;
+use App\Models\Course;
 use App\Models\Role;
+use App\Models\Section;
 use App\Models\Student;
 use App\Models\Supervisor;
 use App\Models\User;
@@ -22,11 +24,12 @@ use Inertia\Response;
 
 class SupervisorController extends Controller
 {
-    use ResolvesDeanCourse;
+    use ResolvesCoordinatorCourse;
 
     public function index(Request $request): Response
     {
-        $course = $this->deanCourseOrFail($request);
+        $section = $this->coordinatorSectionOrFail($request);
+        $course = $section->course;
 
         $companies = Company::query()
             ->where('course_id', $course->id)
@@ -54,11 +57,6 @@ class SupervisorController extends Controller
                 'company:id,name',
                 'department:id,name',
             ])
-            ->withCount([
-                'students as students_count' => fn ($query) => $query
-                    ->where('is_active', true)
-                    ->whereHas('section', fn ($sectionQuery) => $sectionQuery->where('course_id', $course->id)),
-            ])
             ->orderBy('id')
             ->get()
             ->map(fn (Supervisor $supervisor) => [
@@ -76,13 +74,13 @@ class SupervisorController extends Controller
                     'name' => $supervisor->department->name,
                 ] : null,
                 'position_title' => $supervisor->position_title,
-                'students_count' => $supervisor->students_count,
+                'students_count' => $this->internCountForSupervisor($supervisor, $section),
                 'is_active' => $supervisor->is_active && $supervisor->user->is_active,
             ])
             ->values()
             ->all();
 
-        return Inertia::render('deans/supervisors', [
+        return Inertia::render('coordinator/supervisors', [
             'companies' => $companies,
             'supervisors' => $supervisors,
         ]);
@@ -132,7 +130,7 @@ class SupervisorController extends Controller
                     'message' => "Supervisor {$validated['name']} was created, but the credentials email could not be sent.",
                 ]);
 
-                return redirect()->route('deans.supervisors.index');
+                return redirect()->route('coordinators.supervisors.index');
             }
 
             Inertia::flash('toast', [
@@ -140,7 +138,7 @@ class SupervisorController extends Controller
                 'message' => "Supervisor {$validated['name']} created and login credentials were emailed.",
             ]);
 
-            return redirect()->route('deans.supervisors.index');
+            return redirect()->route('coordinators.supervisors.index');
         }
 
         Inertia::flash('toast', [
@@ -148,12 +146,12 @@ class SupervisorController extends Controller
             'message' => "Supervisor {$validated['name']} created. Password: {$password}",
         ]);
 
-        return redirect()->route('deans.supervisors.index');
+        return redirect()->route('coordinators.supervisors.index');
     }
 
     public function update(UpdateSupervisorRequest $request, Supervisor $supervisor): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
+        $course = $this->coordinatorCourseOrFail($request);
         $supervisor->loadMissing('company');
         abort_unless($supervisor->company?->course_id === $course->id, 404);
 
@@ -184,28 +182,22 @@ class SupervisorController extends Controller
             'message' => 'Supervisor updated successfully.',
         ]);
 
-        return redirect()->route('deans.supervisors.index');
+        return redirect()->route('coordinators.supervisors.index');
     }
 
     public function destroy(Request $request, Supervisor $supervisor): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
+        $course = $this->coordinatorCourseOrFail($request);
         $supervisor->loadMissing('company');
         abort_unless($supervisor->company?->course_id === $course->id, 404);
 
-        if (
-            Student::query()
-                ->where('supervisor_id', $supervisor->id)
-                ->where('is_active', true)
-                ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
-                ->exists()
-        ) {
+        if ($this->supervisorHasActiveInternsInCourse($supervisor, $course)) {
             Inertia::flash('toast', [
                 'type' => 'error',
-                'message' => 'Cannot deactivate a supervisor with active interns assigned.',
+                'message' => 'Cannot deactivate a supervisor with active interns in their department.',
             ]);
 
-            return redirect()->route('deans.supervisors.index');
+            return redirect()->route('coordinators.supervisors.index');
         }
 
         DB::transaction(function () use ($supervisor): void {
@@ -218,12 +210,12 @@ class SupervisorController extends Controller
             'message' => 'Supervisor deactivated.',
         ]);
 
-        return redirect()->route('deans.supervisors.index');
+        return redirect()->route('coordinators.supervisors.index');
     }
 
     public function mailCredentials(Request $request, Supervisor $supervisor): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
+        $course = $this->coordinatorCourseOrFail($request);
         $supervisor->loadMissing(['company', 'department', 'user']);
         abort_unless($supervisor->company?->course_id === $course->id, 404);
         abort_unless($supervisor->is_active && $supervisor->user->is_active, 422);
@@ -238,7 +230,7 @@ class SupervisorController extends Controller
                 'message' => 'Unable to send supervisor credentials. Please check your mail settings and try again.',
             ]);
 
-            return redirect()->route('deans.supervisors.index');
+            return redirect()->route('coordinators.supervisors.index');
         }
 
         Inertia::flash('toast', [
@@ -246,7 +238,7 @@ class SupervisorController extends Controller
             'message' => "Login credentials sent to {$supervisor->user->name}. Their password was reset to a new temporary password.",
         ]);
 
-        return redirect()->route('deans.supervisors.index');
+        return redirect()->route('coordinators.supervisors.index');
     }
 
     private function sendSupervisorCredentials(
@@ -272,5 +264,39 @@ class SupervisorController extends Controller
         );
 
         return $password;
+    }
+
+    private function internCountForSupervisor(Supervisor $supervisor, Section $section): int
+    {
+        $query = Student::query()
+            ->where('is_active', true)
+            ->where('section_id', $section->id);
+
+        if ($supervisor->department_id !== null) {
+            return (clone $query)
+                ->where('department_id', $supervisor->department_id)
+                ->count();
+        }
+
+        return (clone $query)
+            ->where('supervisor_id', $supervisor->id)
+            ->count();
+    }
+
+    private function supervisorHasActiveInternsInCourse(Supervisor $supervisor, Course $course): bool
+    {
+        $studentQuery = Student::query()
+            ->where('is_active', true)
+            ->whereHas('section', fn ($query) => $query->where('course_id', $course->id));
+
+        if ($supervisor->department_id !== null) {
+            return (clone $studentQuery)
+                ->where('department_id', $supervisor->department_id)
+                ->exists();
+        }
+
+        return (clone $studentQuery)
+            ->where('supervisor_id', $supervisor->id)
+            ->exists();
     }
 }

@@ -15,55 +15,7 @@ use App\Models\TimeLog;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\SchoolYearSeeder;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-
-function createCoordinatorWithSection(): array
-{
-    $coordinatorRoleId = Role::query()->where('name', 'coordinator')->value('id');
-    $internRoleId = Role::query()->where('name', 'intern')->value('id');
-    $schoolYear = SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
-
-    $course = Course::query()->create([
-        'code' => 'BSIT',
-        'name' => 'Bachelor of Science in Information Technology',
-        'required_hours' => 486,
-        'dean_user_id' => User::factory()->create([
-            'role_id' => Role::query()->where('name', 'dean')->value('id'),
-        ])->id,
-        'is_active' => true,
-    ]);
-
-    $coordinator = User::factory()->create([
-        'role_id' => $coordinatorRoleId,
-    ]);
-
-    $section = Section::query()->create([
-        'course_id' => $course->id,
-        'school_year_id' => $schoolYear->id,
-        'name' => '4A',
-        'coordinator_user_id' => $coordinator->id,
-        'is_active' => true,
-    ]);
-
-    $studentUser = User::factory()->create([
-        'role_id' => $internRoleId,
-        'email' => 'intern.one@gmail.com',
-        'password' => Hash::make('password'),
-    ]);
-
-    $student = Student::query()->create([
-        'user_id' => $studentUser->id,
-        'student_number' => '2022-1-04311',
-        'first_name' => 'John',
-        'middle_name' => 'Michael',
-        'last_name' => 'Doe',
-        'section_id' => $section->id,
-        'is_active' => true,
-    ]);
-
-    return compact('coordinator', 'section', 'student', 'course');
-}
 
 it('redirects coordinators to the coordinator dashboard after login', function () {
     $this->seed(RoleSeeder::class);
@@ -98,7 +50,7 @@ it('allows a coordinator to assign a student to a company', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);
 
-    ['coordinator' => $coordinator, 'student' => $student, 'course' => $course] = createCoordinatorWithSection();
+    ['coordinator' => $coordinator, 'student' => $student, 'section' => $section, 'course' => $course] = createCoordinatorWithSection();
 
     $company = Company::query()->create([
         'course_id' => $course->id,

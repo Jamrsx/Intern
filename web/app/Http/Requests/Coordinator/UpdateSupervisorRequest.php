@@ -1,16 +1,31 @@
 <?php
 
-namespace App\Http\Requests\Dean;
+namespace App\Http\Requests\Coordinator;
 
+use App\Http\Requests\Coordinator\Concerns\AuthorizesCoordinatorCourse;
+use App\Models\Supervisor;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class StoreSupervisorRequest extends FormRequest
+class UpdateSupervisorRequest extends FormRequest
 {
+    use AuthorizesCoordinatorCourse;
+
     public function authorize(): bool
     {
-        return ($this->user()?->hasRole('dean') ?? false)
-            && $this->user()?->courseAsDean !== null;
+        if (! $this->isCoordinatorWithCourse()) {
+            return false;
+        }
+
+        $supervisor = $this->route('supervisor');
+
+        if (! $supervisor instanceof Supervisor) {
+            return false;
+        }
+
+        $supervisor->loadMissing('company');
+
+        return $supervisor->company?->course_id === $this->coordinatorCourseId();
     }
 
     /**
@@ -18,11 +33,19 @@ class StoreSupervisorRequest extends FormRequest
      */
     public function rules(): array
     {
-        $courseId = $this->user()?->courseAsDean?->id;
+        /** @var Supervisor $supervisor */
+        $supervisor = $this->route('supervisor');
+        $courseId = $this->coordinatorCourseId();
 
         return [
             'name' => ['required', 'string', 'max:150'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                Rule::unique('users', 'email')->ignore($supervisor->user_id),
+            ],
             'company_id' => [
                 'required',
                 'integer',
@@ -42,14 +65,7 @@ class StoreSupervisorRequest extends FormRequest
                 }),
             ],
             'position_title' => ['nullable', 'string', 'max:100'],
-            'password' => [
-                Rule::requiredIf(fn () => ! $this->boolean('send_credentials_email')),
-                'nullable',
-                'string',
-                'min:8',
-                'max:255',
-            ],
-            'send_credentials_email' => ['sometimes', 'boolean'],
+            'is_active' => ['sometimes', 'boolean'],
         ];
     }
 

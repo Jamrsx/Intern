@@ -20,15 +20,15 @@ import { cn } from '@/lib/utils';
 import {
     deactivated as deactivatedCompaniesIndex,
     destroy as destroyCompany,
-    index as deanCompaniesIndex,
+    index as coordinatorCompaniesIndex,
     store,
     update,
-} from '@/routes/deans/companies';
+} from '@/routes/coordinators/companies';
 import {
     destroy as destroyDepartment,
     store as storeDepartment,
     update as updateDepartment,
-} from '@/routes/deans/companies/departments';
+} from '@/routes/coordinators/companies/departments';
 
 type DepartmentRow = {
     id: number;
@@ -60,7 +60,7 @@ type DepartmentDraft = {
     name: string;
 };
 
-const COMPANY_GROUP_STATE_KEY = 'dean-companies-group-state';
+const COMPANY_GROUP_STATE_KEY = 'coordinator-companies-group-state';
 
 function readStoredCompanyGroupState(): Record<number, boolean> {
     if (typeof window === 'undefined') {
@@ -94,7 +94,7 @@ function persistCompanyGroupState(state: Record<number, boolean>): void {
 
 const emptyDepartmentDraft = (): DepartmentDraft => ({ name: '' });
 
-export default function DeanCompanies({
+export default function CoordinatorCompanies({
     companies,
     deactivated_count,
 }: Props) {
@@ -118,10 +118,10 @@ export default function DeanCompanies({
         const storedState = readStoredCompanyGroupState();
         setOpenGroups(storedState);
         setHasLoadedGroupState(true);
-        console.log('Dean companies group state restored', storedState);
+        console.log('Coordinator companies group state restored', storedState);
     }, []);
 
-    console.log('Dean Companies page loaded', {
+    console.log('Coordinator Companies page loaded', {
         count: companies.length,
         deactivated_count,
     });
@@ -146,7 +146,7 @@ export default function DeanCompanies({
             };
 
             persistCompanyGroupState(next);
-            console.log('Dean companies group state saved', next);
+            console.log('Coordinator companies group state saved', next);
 
             return next;
         });
@@ -210,7 +210,7 @@ export default function DeanCompanies({
                     title="Companies"
                     description="Create OJT companies, their address, and departments for intern placement."
                     icon={Building2}
-                    badgeText="Dean"
+                    badgeText="Coordinator"
                     action={
                         <div className="flex flex-wrap gap-2">
                             <Button variant="outline" asChild>
@@ -802,6 +802,6 @@ export default function DeanCompanies({
     );
 }
 
-DeanCompanies.layout = {
-    breadcrumbs: [{ title: 'Companies', href: deanCompaniesIndex().url }],
+CoordinatorCompanies.layout = {
+    breadcrumbs: [{ title: 'Companies', href: coordinatorCompaniesIndex().url }],
 };
