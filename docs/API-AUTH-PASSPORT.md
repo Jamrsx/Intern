@@ -19,10 +19,12 @@
 ```json
 POST /api/auth/login
 {
-  "email": "intern@example.com",
+  "student_number": "2022-1-04311",
   "password": "password"
 }
 ```
+
+Interns sign in with their **student ID** (`student_number`) and password, not email.
 
 ### Login response
 
@@ -31,7 +33,8 @@ POST /api/auth/login
   "token_type": "Bearer",
   "access_token": "...",
   "expires_at": "2026-06-12T00:00:00+00:00",
-  "user": { "id": 1, "name": "...", "email": "...", "role": { ... } }
+  "user": { "id": 1, "name": "...", "email": "...", "role": { ... } },
+  "student": { "id": 1, "student_number": "2022-1-04311", "full_name": "John Michael Doe" }
 }
 ```
 

@@ -1,45 +1,119 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+    ActivityIndicator,
+    Platform,
+    StatusBar,
+    StyleSheet,
+    View,
+} from 'react-native';
+import { fetchCurrentUser } from './src/api/auth';
+import { clearSession, getSession, saveSession } from './src/storage/authStorage';
+import { LoginScreen } from './src/screens/LoginScreen';
+import { HomeScreen } from './src/screens/HomeScreen';
+import { colors } from './src/theme/colors';
+import type { StoredSession } from './src/types/auth';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
-  );
+function BootScreen() {
+    return (
+        <View style={styles.bootContainer}>
+            <ActivityIndicator size="large" color={colors.brand} />
+        </View>
+    );
 }
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+export default function App() {
+    const [session, setSession] = useState<StoredSession | null>(null);
+    const [isBootstrapping, setIsBootstrapping] = useState(true);
 
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
+    useEffect(() => {
+        StatusBar.setHidden(true);
+        StatusBar.setTranslucent(true);
+        StatusBar.setBackgroundColor('transparent');
+
+        if (Platform.OS === 'android') {
+            StatusBar.setBarStyle('light-content');
+        }
+    }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const restoreSession = async () => {
+            const storedSession = await getSession();
+
+            if (!storedSession) {
+                if (isMounted) {
+                    setIsBootstrapping(false);
+                }
+
+                return;
+            }
+
+            try {
+                const user = await fetchCurrentUser(storedSession.accessToken);
+                const refreshedSession = { ...storedSession, user };
+
+                await saveSession(refreshedSession);
+
+                if (isMounted) {
+                    setSession(refreshedSession);
+                    console.log('Session restored', { userId: user.id });
+                }
+            } catch (error) {
+                console.log('Stored session invalid, clearing', error);
+                await clearSession();
+            } finally {
+                if (isMounted) {
+                    setIsBootstrapping(false);
+                }
+            }
+        };
+
+        restoreSession();
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    const handleLoginSuccess = useCallback(async (nextSession: StoredSession) => {
+        await saveSession(nextSession);
+        setSession(nextSession);
+    }, []);
+
+    const handleLogout = useCallback(async () => {
+        await clearSession();
+        setSession(null);
+    }, []);
+
+    let content = <BootScreen />;
+
+    if (!isBootstrapping) {
+        content = session ? (
+            <HomeScreen session={session} onLogout={handleLogout} />
+        ) : (
+            <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        );
+    }
+
+    return (
+        <>
+            <StatusBar
+                hidden
+                translucent
+                backgroundColor="transparent"
+                barStyle="light-content"
+            />
+            {content}
+        </>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+    bootContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: colors.background,
+    },
 });
-
-export default App;

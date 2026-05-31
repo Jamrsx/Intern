@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\LoginRequest;
-use App\Models\User;
+use App\Models\Student;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -14,19 +14,28 @@ class AuthController extends Controller
 {
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::query()
-            ->where('email', $request->validated('email'))
+        $student = Student::query()
+            ->with(['user.role'])
+            ->where('student_number', $request->validated('student_number'))
             ->first();
 
-        if (! $user || ! Hash::check($request->validated('password'), $user->password)) {
+        $user = $student?->user;
+
+        if ($user === null || ! Hash::check($request->validated('password'), $user->password)) {
             throw ValidationException::withMessages([
-                'email' => [__('auth.failed')],
+                'student_number' => ['Invalid student ID or password.'],
             ]);
         }
 
-        if (! $user->is_active) {
+        if (! $user->is_active || ! $student->is_active) {
             throw ValidationException::withMessages([
-                'email' => ['Your account is inactive.'],
+                'student_number' => ['Your account is inactive.'],
+            ]);
+        }
+
+        if (! $user->hasRole('intern')) {
+            throw ValidationException::withMessages([
+                'student_number' => ['This login is for intern accounts only.'],
             ]);
         }
 
@@ -37,6 +46,11 @@ class AuthController extends Controller
             'access_token' => $token->accessToken,
             'expires_at' => $token->token->expires_at?->toIso8601String(),
             'user' => $user->load('role'),
+            'student' => [
+                'id' => $student->id,
+                'student_number' => $student->student_number,
+                'full_name' => $student->fullName(),
+            ],
         ]);
     }
 
@@ -55,8 +69,19 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user()->load('role');
+
+        $student = Student::query()
+            ->where('user_id', $user->id)
+            ->first();
+
         return response()->json([
-            'user' => $request->user()->load('role'),
+            'user' => $user,
+            'student' => $student ? [
+                'id' => $student->id,
+                'student_number' => $student->student_number,
+                'full_name' => $student->fullName(),
+            ] : null,
         ]);
     }
 }
