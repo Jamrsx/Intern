@@ -44,15 +44,34 @@ class OjtProgressCalculator
             ->first();
 
         $estimatedEndDate = null;
+        $estimatedEndIsApproximate = false;
+        $estimatedEndBasis = null;
 
         if ($remainingHours <= 0) {
             $estimatedEndDate = Carbon::today()->toDateString();
-        } elseif ($schedule !== null) {
-            $hoursPerWeek = (float) $schedule->hours_per_day * (int) $schedule->days_per_week;
+            $estimatedEndBasis = 'completed';
+        } else {
+            $hoursPerDay = 8.0;
+            $daysPerWeek = 5;
+
+            if ($schedule !== null) {
+                $hoursPerDay = (float) $schedule->hours_per_day;
+                $daysPerWeek = (int) $schedule->days_per_week;
+                $estimatedEndBasis = 'schedule';
+            } else {
+                $estimatedEndIsApproximate = true;
+                $estimatedEndBasis = 'default_schedule';
+            }
+
+            $hoursPerWeek = $hoursPerDay * $daysPerWeek;
 
             if ($hoursPerWeek > 0) {
                 $weeksRemaining = (int) ceil($remainingHours / $hoursPerWeek);
                 $estimatedEndDate = Carbon::today()->addWeeks($weeksRemaining)->toDateString();
+
+                if ($schedule === null) {
+                    $estimatedEndIsApproximate = true;
+                }
             }
         }
 
@@ -63,6 +82,8 @@ class OjtProgressCalculator
             'percent_complete' => $percentComplete,
             'time_log_count' => $logs->count(),
             'estimated_end_date' => $estimatedEndDate,
+            'estimated_end_is_approximate' => $estimatedEndIsApproximate,
+            'estimated_end_basis' => $estimatedEndBasis,
             'schedule' => $schedule ? [
                 'hours_per_day' => (float) $schedule->hours_per_day,
                 'days_per_week' => (int) $schedule->days_per_week,

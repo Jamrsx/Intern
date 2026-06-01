@@ -9,7 +9,7 @@ import {
 import { fetchCurrentUser } from './src/api/auth';
 import { clearSession, getSession, saveSession } from './src/storage/authStorage';
 import { LoginScreen } from './src/screens/LoginScreen';
-import { HomeScreen } from './src/screens/HomeScreen';
+import { InternShellScreen } from './src/screens/InternShellScreen';
 import { colors } from './src/theme/colors';
 import type { StoredSession } from './src/types/auth';
 
@@ -90,7 +90,7 @@ export default function App() {
 
     if (!isBootstrapping) {
         content = session ? (
-            <HomeScreen session={session} onLogout={handleLogout} />
+            <InternShellScreen session={session} onLogout={handleLogout} />
         ) : (
             <LoginScreen onLoginSuccess={handleLoginSuccess} />
         );

@@ -1,159 +1,398 @@
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { logout } from '../api/auth';
-import { getWebLoginUrl } from '../config/api.environment';
-import { OccLogoMark } from '../components/OccLogoMark';
+import { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from 'react-native';
+import { fetchInternProgress } from '../api/intern';
+import { ApiError } from '../api/client';
 import { colors } from '../theme/colors';
 import type { StoredSession } from '../types/auth';
+import type { InternProgressResponse } from '../types/intern';
 
 type Props = {
     session: StoredSession;
-    onLogout: () => void;
 };
 
-export function HomeScreen({ session, onLogout }: Props) {
-    const handleLogout = async () => {
+function formatHours(value: number): string {
+    return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatDate(dateString: string): string {
+    const date = new Date(`${dateString}T00:00:00`);
+
+    return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
+
+function getTentativeEndCaption(
+    progress: InternProgressResponse['progress'],
+): string {
+    if (progress.estimated_end_basis === 'completed') {
+        return 'Required hours completed';
+    }
+
+    if (progress.estimated_end_is_approximate) {
+        return 'Approximate · based on 8 hrs/day, 5 days/week';
+    }
+
+    if (progress.schedule) {
+        return `Approximate · ${progress.schedule.hours_per_day} hrs/day, ${progress.schedule.days_per_week} days/week`;
+    }
+
+    return 'Approximate · based on your OJT schedule';
+}
+
+export function HomeScreen({ session }: Props) {
+    const [data, setData] = useState<InternProgressResponse | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    const loadProgress = useCallback(async () => {
+        setIsLoading(true);
+        setErrorMessage(null);
+
         try {
-            await logout(session.accessToken);
+            const response = await fetchInternProgress(session.accessToken);
+            setData(response);
         } catch (error) {
-            console.log('Logout API failed, clearing local session anyway', error);
+            if (error instanceof ApiError) {
+                setErrorMessage(error.message);
+            } else if (error instanceof Error) {
+                setErrorMessage(error.message);
+            } else {
+                setErrorMessage('Unable to load your OJT progress.');
+            }
+        } finally {
+            setIsLoading(false);
         }
+    }, [session.accessToken]);
 
-        onLogout();
-    };
+    useEffect(() => {
+        loadProgress();
+    }, [loadProgress]);
 
-    const openWebPortal = () => {
-        const url = getWebLoginUrl();
-        console.log('Opening web portal', { url, platform: Platform.OS });
-        Linking.openURL(url).catch((error) => {
-            console.log('Failed to open web portal', error);
-        });
-    };
+    const displayName =
+        data?.student.full_name ?? session.user.name;
+    const progress = data?.progress;
+    const course = data?.course;
 
     return (
-        <View style={styles.screen}>
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <OccLogoMark size={48} />
-                    <Text style={styles.greeting}>Welcome, {session.user.name}</Text>
-                    <Text style={styles.meta}>{session.user.email}</Text>
-                    {session.user.role?.label ? (
-                        <View style={styles.roleBadge}>
-                            <Text style={styles.roleBadgeText}>
-                                {session.user.role.label}
+        <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+        >
+            <View style={styles.header}>
+                <Text style={styles.heading}>OJT Progress</Text>
+                <Text style={styles.greeting}>Welcome, {displayName}</Text>
+                {course ? (
+                    <Text style={styles.courseMeta}>
+                        {course.code} • {course.name}
+                    </Text>
+                ) : null}
+            </View>
+
+            {isLoading ? (
+                <View style={styles.stateCard}>
+                    <ActivityIndicator size="large" color={colors.brand} />
+                    <Text style={styles.stateText}>Loading your hours…</Text>
+                </View>
+            ) : null}
+
+            {!isLoading && errorMessage ? (
+                <View style={styles.stateCard}>
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                    <Pressable onPress={loadProgress} style={styles.retryButton}>
+                        <Text style={styles.retryButtonText}>Try again</Text>
+                    </Pressable>
+                </View>
+            ) : null}
+
+            {!isLoading && progress && !errorMessage ? (
+                <>
+                    <View style={styles.heroCard}>
+                        <Text style={styles.heroLabel}>Hours remaining</Text>
+                        <Text style={styles.heroValue}>
+                            {formatHours(progress.remaining_hours)}
+                        </Text>
+                        <Text style={styles.heroUnit}>hours to complete</Text>
+
+                        <View style={styles.progressTrack}>
+                            <View
+                                style={[
+                                    styles.progressFill,
+                                    {
+                                        width: `${Math.min(progress.percent_complete, 100)}%`,
+                                    },
+                                ]}
+                            />
+                        </View>
+                        <Text style={styles.progressCaption}>
+                            {progress.percent_complete}% of required hours
+                            completed
+                        </Text>
+                    </View>
+
+                    {progress.estimated_end_date ? (
+                        <View style={styles.endDateCard}>
+                            <Text style={styles.endDateLabel}>
+                                Tentative end date
+                            </Text>
+                            <Text style={styles.endDateValue}>
+                                {formatDate(progress.estimated_end_date)}
+                            </Text>
+                            <Text style={styles.endDateCaption}>
+                                {getTentativeEndCaption(progress)}
                             </Text>
                         </View>
                     ) : null}
-                </View>
 
-                <View style={styles.placeholderCard}>
-                    <Text style={styles.placeholderTitle}>Home coming next</Text>
-                    <Text style={styles.placeholderText}>
-                        After login, this screen will show your OJT progress,
-                        time in/out, and document uploads.
-                    </Text>
-                </View>
+                    <View style={styles.statsRow}>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statLabel}>Required</Text>
+                            <Text style={styles.statValue}>
+                                {formatHours(progress.required_hours)}
+                            </Text>
+                            <Text style={styles.statUnit}>hrs</Text>
+                        </View>
+                        <View style={styles.statCard}>
+                            <Text style={styles.statLabel}>Rendered</Text>
+                            <Text style={styles.statValue}>
+                                {formatHours(progress.rendered_hours)}
+                            </Text>
+                            <Text style={styles.statUnit}>hrs</Text>
+                        </View>
+                    </View>
 
-                {Platform.OS === 'ios' ? (
-                    <Pressable onPress={openWebPortal} style={styles.secondaryButton}>
-                        <Text style={styles.secondaryButtonText}>
-                            Open web portal in browser
-                        </Text>
-                    </Pressable>
-                ) : null}
-
-                <Pressable onPress={handleLogout} style={styles.logoutButton}>
-                    <Text style={styles.logoutButtonText}>Sign out</Text>
-                </Pressable>
-            </View>
-        </View>
+                    <View style={styles.detailCard}>
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Time logs</Text>
+                            <Text style={styles.detailValue}>
+                                {progress.time_log_count}
+                            </Text>
+                        </View>
+                        {progress.schedule ? (
+                            <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>Schedule</Text>
+                                <Text style={styles.detailValue}>
+                                    {progress.schedule.hours_per_day} hrs/day •{' '}
+                                    {progress.schedule.days_per_week} days/week
+                                </Text>
+                            </View>
+                        ) : null}
+                    </View>
+                </>
+            ) : null}
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    screen: {
+    scroll: {
         flex: 1,
-        backgroundColor: colors.background,
-        paddingTop: Platform.OS === 'android' ? 24 : 32,
+    },
+    scrollContent: {
+        paddingHorizontal: 20,
         paddingBottom: 24,
     },
-    container: {
-        flex: 1,
-        paddingHorizontal: 24,
-    },
     header: {
-        alignItems: 'center',
-        marginBottom: 24,
+        marginBottom: 20,
+    },
+    heading: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: colors.brand,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
     },
     greeting: {
-        marginTop: 16,
+        marginTop: 8,
         fontSize: 24,
         fontWeight: '700',
         color: colors.text,
-        textAlign: 'center',
     },
-    meta: {
+    courseMeta: {
         marginTop: 6,
         fontSize: 14,
+        lineHeight: 20,
         color: colors.textMuted,
     },
-    roleBadge: {
-        marginTop: 12,
-        backgroundColor: colors.brandMuted,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 999,
-    },
-    roleBadgeText: {
-        color: colors.brand,
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    placeholderCard: {
-        flex: 1,
+    stateCard: {
         borderWidth: 1,
         borderColor: colors.border,
         borderRadius: 16,
         backgroundColor: colors.surface,
-        padding: 20,
-        justifyContent: 'center',
+        padding: 24,
+        alignItems: 'center',
     },
-    placeholderTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: colors.text,
-        marginBottom: 8,
-    },
-    placeholderText: {
-        fontSize: 15,
-        lineHeight: 22,
+    stateText: {
+        marginTop: 12,
+        fontSize: 14,
         color: colors.textMuted,
     },
-    secondaryButton: {
+    errorText: {
+        fontSize: 14,
+        lineHeight: 20,
+        color: colors.error,
+        textAlign: 'center',
+    },
+    retryButton: {
         marginTop: 16,
-        minHeight: 48,
-        borderRadius: 12,
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 10,
+        backgroundColor: colors.brand,
+    },
+    retryButtonText: {
+        color: colors.brandForeground,
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    heroCard: {
+        borderRadius: 18,
+        backgroundColor: colors.brand,
+        padding: 24,
+        alignItems: 'center',
+        ...Platform.select({
+            android: { elevation: 4 },
+            ios: {
+                shadowColor: '#0F172A',
+                shadowOpacity: 0.12,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 4 },
+            },
+        }),
+    },
+    heroLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: 'rgba(255, 255, 255, 0.85)',
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    heroValue: {
+        marginTop: 8,
+        fontSize: 56,
+        fontWeight: '800',
+        color: colors.brandForeground,
+        lineHeight: 60,
+    },
+    heroUnit: {
+        marginTop: 4,
+        fontSize: 15,
+        color: 'rgba(255, 255, 255, 0.9)',
+    },
+    progressTrack: {
+        marginTop: 20,
+        width: '100%',
+        height: 8,
+        borderRadius: 999,
+        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 999,
+        backgroundColor: colors.brandForeground,
+    },
+    progressCaption: {
+        marginTop: 10,
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.88)',
+        textAlign: 'center',
+    },
+    endDateCard: {
+        marginTop: 16,
         borderWidth: 1,
         borderColor: colors.border,
+        borderRadius: 14,
+        backgroundColor: colors.brandMuted,
+        padding: 18,
         alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: colors.background,
     },
-    secondaryButtonText: {
+    endDateLabel: {
+        fontSize: 12,
+        fontWeight: '700',
         color: colors.brand,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    endDateValue: {
+        marginTop: 8,
+        fontSize: 26,
+        fontWeight: '800',
+        color: colors.text,
+    },
+    endDateCaption: {
+        marginTop: 6,
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.textMuted,
+        textAlign: 'center',
+    },
+    statsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 16,
+    },
+    statCard: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 14,
+        backgroundColor: colors.surface,
+        padding: 16,
+        alignItems: 'center',
+    },
+    statLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+    },
+    statValue: {
+        marginTop: 8,
+        fontSize: 28,
+        fontWeight: '700',
+        color: colors.text,
+    },
+    statUnit: {
+        marginTop: 2,
+        fontSize: 13,
+        color: colors.textSubtle,
+    },
+    detailCard: {
+        marginTop: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 14,
+        backgroundColor: colors.background,
+        padding: 16,
+        gap: 14,
+    },
+    detailRow: {
+        gap: 4,
+    },
+    detailLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.textMuted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.3,
+    },
+    detailValue: {
         fontSize: 15,
         fontWeight: '600',
-    },
-    logoutButton: {
-        marginTop: 12,
-        minHeight: 48,
-        borderRadius: 12,
-        backgroundColor: colors.brand,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    logoutButtonText: {
-        color: colors.brandForeground,
-        fontSize: 15,
-        fontWeight: '700',
+        color: colors.text,
+        lineHeight: 22,
     },
 });
