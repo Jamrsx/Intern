@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\InternPasswordController;
+use App\Http\Controllers\Api\InternProfileController;
 use App\Http\Controllers\Api\InternProgressController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -16,6 +18,8 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware('auth:api')->prefix('intern')->group(function (): void {
     Route::get('/progress', [InternProgressController::class, 'show']);
+    Route::get('/profile', [InternProfileController::class, 'show']);
+    Route::put('/password', [InternPasswordController::class, 'update']);
 });
 
 Route::get('/user', function (Request $request) {

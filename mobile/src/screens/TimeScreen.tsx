@@ -6,8 +6,7 @@ export function TimeScreen() {
         <View style={styles.screen}>
             <Text style={styles.heading}>Time in / out</Text>
             <Text style={styles.description}>
-                Facial recognition time logging will be available here in a
-                future update.
+                Time in and time out will be available here in a future update.
             </Text>
         </View>
     );
