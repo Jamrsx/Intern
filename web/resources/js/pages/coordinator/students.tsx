@@ -1,6 +1,16 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Building2, ChevronDown, ClipboardList, Eye, Search, Users } from 'lucide-react';
-import { useLayoutEffect, useMemo, useState } from 'react';
+import {
+    Bell,
+    Building2,
+    ChevronDown,
+    ClipboardList,
+    Eye,
+    FileText,
+    Search,
+    Users,
+} from 'lucide-react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { PageHeader } from '@/components/superadmin/page-header';
@@ -22,6 +32,13 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import {
+    countUnreadDocumentSubmissions,
+    ensureDocumentNotificationBaseline,
+    hasUnreadDocumentSubmission,
+    markStudentDocumentsAsSeen,
+    readDocumentSeenMap,
+} from '@/lib/coordinator-document-notifications';
 import { cn } from '@/lib/utils';
 import { index as evaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { storeAll as storeAllEvaluations } from '@/routes/coordinators/students/evaluations';
@@ -53,6 +70,9 @@ type StudentRow = {
     supervisor_id: number | null;
     supervisor: { id: number; name: string } | null;
     is_active: boolean;
+    documents_count: number;
+    has_submitted_documents: boolean;
+    latest_document_uploaded_at: string | null;
 };
 
 type CompanyGroup = {
@@ -123,6 +143,11 @@ export default function CoordinatorStudents() {
     >(null);
     const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
     const [hasLoadedGroupState, setHasLoadedGroupState] = useState(false);
+    const [documentSeenMap, setDocumentSeenMap] = useState<
+        Record<number, string>
+    >({});
+    const [notificationsReady, setNotificationsReady] = useState(false);
+    const hasShownDocumentToast = useRef(false);
 
     useLayoutEffect(() => {
         const storedState = readStoredCompanyGroupState();
@@ -130,6 +155,69 @@ export default function CoordinatorStudents() {
         setHasLoadedGroupState(true);
         console.log('Coordinator students group state restored', storedState);
     }, []);
+
+    useLayoutEffect(() => {
+        if (!section) {
+            setNotificationsReady(false);
+            return;
+        }
+
+        const seenMap = ensureDocumentNotificationBaseline(
+            section.id,
+            students,
+        );
+        setDocumentSeenMap(seenMap);
+        setNotificationsReady(true);
+    }, [section, students]);
+
+    const unreadDocumentCount = useMemo(() => {
+        if (!notificationsReady) {
+            return 0;
+        }
+
+        return countUnreadDocumentSubmissions(students, documentSeenMap);
+    }, [documentSeenMap, notificationsReady, students]);
+
+    useEffect(() => {
+        if (
+            !notificationsReady ||
+            !section ||
+            hasShownDocumentToast.current
+        ) {
+            return;
+        }
+
+        if (unreadDocumentCount > 0) {
+            toast.info(
+                unreadDocumentCount === 1
+                    ? '1 student submitted a new document.'
+                    : `${unreadDocumentCount} students submitted new documents.`,
+                {
+                    description:
+                        'Check the Documents column or open the student profile.',
+                    duration: 6000,
+                },
+            );
+            hasShownDocumentToast.current = true;
+            console.log('Coordinator document notification toast shown', {
+                unreadDocumentCount,
+            });
+        }
+    }, [notificationsReady, section, unreadDocumentCount]);
+
+    const handleViewStudent = (student: StudentRow) => {
+        if (!section) {
+            return;
+        }
+
+        markStudentDocumentsAsSeen(
+            section.id,
+            student.id,
+            student.latest_document_uploaded_at,
+        );
+
+        setDocumentSeenMap(readDocumentSeenMap(section.id));
+    };
 
     console.log('Coordinator students loaded', {
         section,
@@ -317,6 +405,31 @@ export default function CoordinatorStudents() {
                     </Card>
                 ) : (
                     <>
+                        {unreadDocumentCount > 0 ? (
+                            <div className="flex items-start gap-3 rounded-lg border border-brand/30 bg-brand/10 px-4 py-3 text-sm text-foreground">
+                                <Bell className="mt-0.5 size-5 shrink-0 text-brand" />
+                                <div>
+                                    <p className="font-semibold text-brand">
+                                        New document
+                                        {unreadDocumentCount === 1
+                                            ? ''
+                                            : 's'}{' '}
+                                        submitted
+                                    </p>
+                                    <p className="mt-1 text-muted-foreground">
+                                        {unreadDocumentCount === 1
+                                            ? '1 intern uploaded a file since you last checked.'
+                                            : `${unreadDocumentCount} interns uploaded files since you last checked.`}{' '}
+                                        Look for the{' '}
+                                        <span className="font-medium text-brand">
+                                            New
+                                        </span>{' '}
+                                        badge in the Documents column.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : null}
+
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                             <Card className="border-sidebar-border/70 shadow-sm">
                                 <CardContent className="flex items-center gap-4 p-4">
@@ -483,6 +596,9 @@ export default function CoordinatorStudents() {
                                                                         Supervisor
                                                                     </th>
                                                                     <th className="px-4 py-3 font-medium">
+                                                                        Documents
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-medium">
                                                                         Status
                                                                     </th>
                                                                     <th className="px-4 py-3 text-right font-medium">
@@ -543,6 +659,32 @@ export default function CoordinatorStudents() {
                                                                                 )}
                                                                             </td>
                                                                             <td className="px-4 py-3">
+                                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                                    {student.has_submitted_documents ? (
+                                                                                        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                                                                                            <FileText className="mr-1 size-3" />
+                                                                                            {
+                                                                                                student.documents_count
+                                                                                            }{' '}
+                                                                                            submitted
+                                                                                        </Badge>
+                                                                                    ) : (
+                                                                                        <Badge variant="secondary">
+                                                                                            None yet
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                    {notificationsReady &&
+                                                                                    hasUnreadDocumentSubmission(
+                                                                                        student,
+                                                                                        documentSeenMap,
+                                                                                    ) ? (
+                                                                                        <Badge className="bg-brand text-brand-foreground hover:bg-brand">
+                                                                                            New
+                                                                                        </Badge>
+                                                                                    ) : null}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-4 py-3">
                                                                                 <Badge
                                                                                     variant={
                                                                                         student.is_active
@@ -571,6 +713,11 @@ export default function CoordinatorStudents() {
                                                                                             student.id,
                                                                                         )}
                                                                                         prefetch
+                                                                                        onClick={() =>
+                                                                                            handleViewStudent(
+                                                                                                student,
+                                                                                            )
+                                                                                        }
                                                                                     >
                                                                                         <Eye className="mr-1 size-3.5" />
                                                                                         View

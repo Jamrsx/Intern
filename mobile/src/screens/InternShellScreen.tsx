@@ -24,7 +24,7 @@ export function InternShellScreen({ session, onLogout }: Props) {
             case 'time':
                 return <TimeScreen />;
             case 'documents':
-                return <DocumentsScreen />;
+                return <DocumentsScreen session={session} />;
             case 'profile':
                 return (
                     <ProfileScreen session={session} onLogout={onLogout} />

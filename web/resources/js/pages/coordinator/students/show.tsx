@@ -10,7 +10,8 @@ import {
     Plus,
     User,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
+import { markStudentDocumentsAsSeen } from '@/lib/coordinator-document-notifications';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { Badge } from '@/components/ui/badge';
@@ -213,6 +214,32 @@ export default function CoordinatorStudentShow() {
         evaluationTemplateCount: evaluation_templates.length,
         can_open_evaluation,
     });
+
+    useLayoutEffect(() => {
+        if (documents.length === 0) {
+            return;
+        }
+
+        const latestUploadedAt = documents.reduce<string | null>(
+            (latest, document) => {
+                if (!latest) {
+                    return document.uploaded_at;
+                }
+
+                return new Date(document.uploaded_at).getTime() >
+                    new Date(latest).getTime()
+                    ? document.uploaded_at
+                    : latest;
+            },
+            null,
+        );
+
+        markStudentDocumentsAsSeen(
+            section.id,
+            student.id,
+            latestUploadedAt,
+        );
+    }, [documents, section.id, student.id]);
 
     const departments = useMemo(() => {
         if (companyId === 'none') {
@@ -704,7 +731,7 @@ export default function CoordinatorStudentShow() {
                                     <thead>
                                         <tr className="border-b bg-muted/40 text-left">
                                             <th className="px-4 py-3 font-medium">
-                                                Type
+                                                Report
                                             </th>
                                             <th className="px-4 py-3 font-medium">
                                                 Filename
@@ -728,8 +755,16 @@ export default function CoordinatorStudentShow() {
                                             >
                                                 <td className="px-4 py-3">
                                                     <div className="font-medium">
-                                                        {document.document_type}
+                                                        {document.notes ||
+                                                            document.document_type}
                                                     </div>
+                                                    {document.notes ? (
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {
+                                                                document.original_filename
+                                                            }
+                                                        </div>
+                                                    ) : null}
                                                     {document.is_required && (
                                                         <Badge
                                                             variant="secondary"

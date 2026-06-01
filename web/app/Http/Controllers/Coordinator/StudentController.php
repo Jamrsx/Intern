@@ -46,7 +46,7 @@ class StudentController extends Controller
             'department:id,name,company_id',
             'supervisor.user:id,name',
             'documents.documentType:id,code,name,is_required',
-        ]);
+        ])->loadCount('documents');
 
         $requiredHours = (int) $section->course->required_hours;
 
@@ -211,6 +211,11 @@ class StudentController extends Controller
                 'name' => $student->supervisor->user->name,
             ] : null,
             'is_active' => $student->is_active,
+            'documents_count' => (int) ($student->documents_count ?? $student->documents()->count()),
+            'has_submitted_documents' => (int) ($student->documents_count ?? $student->documents()->count()) > 0,
+            'latest_document_uploaded_at' => $student->latest_document_uploaded_at
+                ? (string) $student->latest_document_uploaded_at
+                : null,
         ];
     }
 
@@ -230,6 +235,8 @@ class StudentController extends Controller
                 'department:id,name,company_id',
                 'supervisor.user:id,name',
             ])
+            ->withCount('documents')
+            ->withMax('documents as latest_document_uploaded_at', 'uploaded_at')
             ->where('section_id', $section->id)
             ->orderBy('last_name')
             ->orderBy('first_name')
