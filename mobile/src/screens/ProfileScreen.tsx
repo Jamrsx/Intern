@@ -12,6 +12,7 @@ import { logout } from '../api/auth';
 import { ApiError } from '../api/client';
 import { fetchInternProfile } from '../api/intern';
 import { ChangePasswordModal } from '../components/ChangePasswordModal';
+import { LogoutConfirmModal } from '../components/LogoutConfirmModal';
 import { colors } from '../theme/colors';
 import type { StoredSession } from '../types/auth';
 import type { InternProfileResponse } from '../types/profile';
@@ -73,6 +74,7 @@ export function ProfileScreen({ session, onLogout }: Props) {
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
 
     const loadProfile = useCallback(async () => {
         setIsLoading(true);
@@ -118,7 +120,7 @@ export function ProfileScreen({ session, onLogout }: Props) {
         ].filter((line): line is string => Boolean(line?.trim()));
     }, [profile?.placement.supervisor]);
 
-    const handleLogout = async () => {
+    const performLogout = useCallback(async () => {
         try {
             await logout(session.accessToken);
         } catch (error) {
@@ -126,7 +128,11 @@ export function ProfileScreen({ session, onLogout }: Props) {
         }
 
         onLogout();
-    };
+    }, [onLogout, session.accessToken]);
+
+    const handleLogoutPress = useCallback(() => {
+        setShowLogoutModal(true);
+    }, []);
 
     const handlePasswordSuccess = (message: string) => {
         setSuccessMessage(message);
@@ -275,7 +281,7 @@ export function ProfileScreen({ session, onLogout }: Props) {
                 ) : null}
 
                 <Pressable
-                    onPress={handleLogout}
+                    onPress={handleLogoutPress}
                     style={({ pressed }) => [
                         styles.logoutButton,
                         pressed && styles.logoutButtonPressed,
@@ -290,6 +296,12 @@ export function ProfileScreen({ session, onLogout }: Props) {
                 accessToken={session.accessToken}
                 onClose={() => setShowPasswordModal(false)}
                 onSuccess={handlePasswordSuccess}
+            />
+
+            <LogoutConfirmModal
+                visible={showLogoutModal}
+                onClose={() => setShowLogoutModal(false)}
+                onConfirm={performLogout}
             />
         </View>
     );
