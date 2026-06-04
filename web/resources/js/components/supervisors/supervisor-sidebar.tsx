@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { BrandLogoMark } from '@/components/brand-logo-mark';
 import { LayoutGrid } from 'lucide-react';
 import { NavMain } from '@/components/nav-main';
@@ -15,15 +15,28 @@ import {
 import { dashboard } from '@/routes/supervisors';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
+type SharedEvaluationAlerts = {
+    role: 'supervisor';
+    pending_count: number;
+    new_count: number;
+    has_unread: boolean;
+} | null;
 
 export function SupervisorSidebar() {
+    const evaluationAlerts = usePage<{ evaluationAlerts: SharedEvaluationAlerts }>()
+        .props.evaluationAlerts;
+
+    const mainNavItems: NavItem[] = [
+        {
+            title: 'Dashboard',
+            href: dashboard(),
+            icon: LayoutGrid,
+            badgeCount: evaluationAlerts?.pending_count ?? 0,
+        },
+    ];
+
+    console.log('Supervisor sidebar evaluation alerts', evaluationAlerts);
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>

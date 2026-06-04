@@ -11,6 +11,7 @@ use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentDocument;
 use App\Models\Supervisor;
+use App\Support\EvaluationAlertService;
 use App\Support\OjtProgressCalculator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,9 @@ class StudentController extends Controller
             'students' => $students,
             'evaluation_stats' => $this->evaluationStats($section),
             'evaluation_templates' => $this->evaluationTemplateOptions($section),
+            'evaluation_alerts' => $section !== null
+                ? EvaluationAlertService::coordinatorAlerts($section)
+                : null,
         ]);
     }
 
@@ -52,7 +56,7 @@ class StudentController extends Controller
 
         return Inertia::render('coordinator/students/show', [
             'section' => $this->sectionPayload($section),
-            'student' => $this->studentPayload($student),
+            'student' => $this->studentPayload($student, $section),
             'progress' => OjtProgressCalculator::forStudent($student, $requiredHours),
             'documents' => $student->documents
                 ->sortByDesc('uploaded_at')
@@ -75,7 +79,8 @@ class StudentController extends Controller
                 ->all(),
             'companies' => $this->companyOptions($section),
             'supervisors' => $this->supervisorOptions($section),
-            'evaluations' => $this->evaluationList($student),
+            'evaluations' => $this->evaluationList($student, $section),
+            'evaluation_alerts' => EvaluationAlertService::coordinatorAlerts($section),
             'evaluation_templates' => $this->evaluationTemplateOptions($section),
             'can_open_evaluation' => $student->supervisor_id !== null
                 && ! OjtEvaluation::query()
@@ -185,8 +190,29 @@ class StudentController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function studentPayload(Student $student): array
+    private function studentPayload(Student $student, ?Section $section = null): array
     {
+        $pendingEvaluation = OjtEvaluation::query()
+            ->with('template:id,name')
+            ->where('student_id', $student->id)
+            ->where('status', OjtEvaluation::STATUS_PENDING)
+            ->latest('opened_at')
+            ->first();
+
+        $latestCompleted = OjtEvaluation::query()
+            ->with('template:id,name')
+            ->where('student_id', $student->id)
+            ->where('status', OjtEvaluation::STATUS_COMPLETED)
+            ->latest('submitted_at')
+            ->first();
+
+        $completedIsNew = $latestCompleted !== null
+            && $section !== null
+            && EvaluationAlertService::isCompletedEvaluationNew(
+                $latestCompleted,
+                $section->evaluation_completed_alerts_seen_at,
+            );
+
         return [
             'id' => $student->id,
             'student_number' => $student->student_number,
@@ -216,6 +242,21 @@ class StudentController extends Controller
             'latest_document_uploaded_at' => $student->latest_document_uploaded_at
                 ? (string) $student->latest_document_uploaded_at
                 : null,
+            'evaluation_status' => $pendingEvaluation !== null
+                ? 'pending_supervisor'
+                : ($latestCompleted !== null ? 'completed' : 'none'),
+            'pending_evaluation' => $pendingEvaluation ? [
+                'id' => $pendingEvaluation->id,
+                'template_name' => $pendingEvaluation->template?->name,
+                'opened_at' => $pendingEvaluation->opened_at->toIso8601String(),
+            ] : null,
+            'latest_completed_evaluation' => $latestCompleted ? [
+                'id' => $latestCompleted->id,
+                'template_name' => $latestCompleted->template?->name,
+                'submitted_at' => $latestCompleted->submitted_at?->toIso8601String(),
+                'is_new' => $completedIsNew,
+            ] : null,
+            'has_new_completed_evaluation' => $completedIsNew,
         ];
     }
 
@@ -241,7 +282,7 @@ class StudentController extends Controller
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get()
-            ->map(fn (Student $student) => $this->studentPayload($student))
+            ->map(fn (Student $student) => $this->studentPayload($student, $section))
             ->values()
             ->all();
     }
@@ -301,7 +342,7 @@ class StudentController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function evaluationList(Student $student): array
+    private function evaluationList(Student $student, Section $section): array
     {
         return OjtEvaluation::query()
             ->with(['supervisor.user:id,name', 'template:id,name'])
@@ -311,6 +352,11 @@ class StudentController extends Controller
             ->map(fn (OjtEvaluation $evaluation) => [
                 'id' => $evaluation->id,
                 'status' => $evaluation->status,
+                'is_new' => $evaluation->status === OjtEvaluation::STATUS_COMPLETED
+                    && EvaluationAlertService::isCompletedEvaluationNew(
+                        $evaluation,
+                        $section->evaluation_completed_alerts_seen_at,
+                    ),
                 'template' => $evaluation->template ? [
                     'id' => $evaluation->template->id,
                     'name' => $evaluation->template->name,
@@ -340,8 +386,11 @@ class StudentController extends Controller
                 'eligible' => 0,
                 'pending' => 0,
                 'without_supervisor' => 0,
+                'new_completed' => 0,
             ];
         }
+
+        $alerts = EvaluationAlertService::coordinatorAlerts($section);
 
         $activeStudents = Student::query()
             ->where('section_id', $section->id)
@@ -360,6 +409,7 @@ class StudentController extends Controller
                 ->count(),
             'pending' => $pendingStudentIds->unique()->count(),
             'without_supervisor' => $activeStudents->whereNull('supervisor_id')->count(),
+            'new_completed' => $alerts['new_completed_count'],
         ];
     }
 }

@@ -18,6 +18,7 @@ class Section extends Model
         'code',
         'coordinator_user_id',
         'is_active',
+        'evaluation_completed_alerts_seen_at',
     ];
 
     /**
@@ -27,6 +28,7 @@ class Section extends Model
     {
         return [
             'is_active' => 'boolean',
+            'evaluation_completed_alerts_seen_at' => 'datetime',
         ];
     }
 

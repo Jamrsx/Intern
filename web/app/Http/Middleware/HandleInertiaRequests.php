@@ -2,6 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Section;
+use App\Models\Supervisor;
+use App\Support\EvaluationAlertService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -42,6 +45,54 @@ class HandleInertiaRequests extends Middleware
                 'user' => fn () => $request->user()?->load('role'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'evaluationAlerts' => fn () => $this->sharedEvaluationAlerts($request),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function sharedEvaluationAlerts(Request $request): ?array
+    {
+        $user = $request->user()?->loadMissing('role');
+
+        if ($user === null) {
+            return null;
+        }
+
+        if ($user->hasRole('supervisor')) {
+            $supervisor = Supervisor::query()
+                ->where('user_id', $user->id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($supervisor === null) {
+                return null;
+            }
+
+            return [
+                'role' => 'supervisor',
+                ...EvaluationAlertService::supervisorAlerts($supervisor),
+            ];
+        }
+
+        if ($user->hasRole('coordinator')) {
+            $section = Section::query()
+                ->where('coordinator_user_id', $user->id)
+                ->where('is_active', true)
+                ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
+                ->first();
+
+            if ($section === null) {
+                return null;
+            }
+
+            return [
+                'role' => 'coordinator',
+                ...EvaluationAlertService::coordinatorAlerts($section),
+            ];
+        }
+
+        return null;
     }
 }

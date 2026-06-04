@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Supervisor;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\Supervisor;
+use App\Support\EvaluationAlertService;
 use App\Support\OjtProgressCalculator;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -30,7 +31,11 @@ class DashboardController extends Controller
         $totalRenderedHours = 0.0;
         $pendingEvaluations = 0;
 
+        $evaluationAlerts = null;
+
         if ($supervisor !== null) {
+            $evaluationAlerts = EvaluationAlertService::supervisorAlerts($supervisor);
+
             $students = Student::query()
                 ->where('supervisor_id', $supervisor->id)
                 ->where('is_active', true)
@@ -68,6 +73,10 @@ class DashboardController extends Controller
                     'pending_evaluation' => $pendingEvaluation ? [
                         'id' => $pendingEvaluation->id,
                         'opened_at' => $pendingEvaluation->opened_at->toIso8601String(),
+                        'is_new' => EvaluationAlertService::isPendingEvaluationNew(
+                            $pendingEvaluation,
+                            $supervisor->evaluation_pending_alerts_seen_at,
+                        ),
                         'template' => $pendingEvaluation->template ? [
                             'id' => $pendingEvaluation->template->id,
                             'name' => $pendingEvaluation->template->name,
@@ -102,7 +111,9 @@ class DashboardController extends Controller
                 'interns' => count($interns),
                 'total_rendered_hours' => round($totalRenderedHours, 2),
                 'pending_evaluations' => $pendingEvaluations,
+                'new_evaluations' => $evaluationAlerts['new_count'] ?? 0,
             ],
+            'evaluation_alerts' => $evaluationAlerts,
             'interns' => $interns,
         ]);
     }

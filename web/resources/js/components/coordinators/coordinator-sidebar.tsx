@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     Briefcase,
@@ -27,7 +27,17 @@ import { index as coordinatorStudentsIndex } from '@/routes/coordinators/student
 import { index as coordinatorSupervisorsIndex } from '@/routes/coordinators/supervisors';
 import type { NavGroup } from '@/types';
 
-const navGroups: NavGroup[] = [
+type SharedEvaluationAlerts = {
+    role: 'coordinator';
+    awaiting_supervisor: number;
+    new_completed_count: number;
+    has_unread: boolean;
+} | null;
+
+function buildNavGroups(
+    evaluationAlerts: SharedEvaluationAlerts,
+): NavGroup[] {
+    return [
     {
         label: 'Overview',
         items: [
@@ -45,6 +55,7 @@ const navGroups: NavGroup[] = [
                 title: 'Students',
                 href: coordinatorStudentsIndex(),
                 icon: Users,
+                badgeCount: evaluationAlerts?.new_completed_count ?? 0,
             },
             {
                 title: 'Evaluation Sheets',
@@ -73,11 +84,18 @@ const navGroups: NavGroup[] = [
             },
         ],
     },
-];
+    ];
+}
 
 export function CoordinatorSidebar() {
+    const evaluationAlerts = usePage<{ evaluationAlerts: SharedEvaluationAlerts }>()
+        .props.evaluationAlerts;
+
+    const navGroups = buildNavGroups(evaluationAlerts);
+
     console.log('Coordinator sidebar nav groups loaded', {
         groups: navGroups.map((group) => group.label),
+        evaluationAlerts,
     });
 
     return (

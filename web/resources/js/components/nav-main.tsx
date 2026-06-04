@@ -6,6 +6,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { NavBadge } from '@/components/nav-badge';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import type { NavItem } from '@/types';
 
@@ -26,6 +27,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                             <Link href={item.href} prefetch>
                                 {item.icon && <item.icon />}
                                 <span>{item.title}</span>
+                                <NavBadge count={item.badgeCount ?? 0} />
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

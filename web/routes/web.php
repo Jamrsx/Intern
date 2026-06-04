@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Coordinator\CompanyController as CoordinatorCompanyController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\EvaluationAlertController as CoordinatorEvaluationAlertController;
 use App\Http\Controllers\Coordinator\DocumentRequirementController as CoordinatorDocumentRequirementController;
 use App\Http\Controllers\Coordinator\EvaluationTemplateController as CoordinatorEvaluationTemplateController;
 use App\Http\Controllers\Coordinator\OjtEvaluationController as CoordinatorOjtEvaluationController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Dean\StudentController as DeanStudentController;
 use App\Http\Controllers\SuperAdmin\CourseController as SuperAdminCourseController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\DeanController as SuperAdminDeanController;
+use App\Http\Controllers\Supervisor\EvaluationAlertController as SupervisorEvaluationAlertController;
 use App\Http\Controllers\Supervisor\DashboardController as SupervisorDashboardController;
 use App\Http\Controllers\Supervisor\OjtEvaluationController as SupervisorOjtEvaluationController;
 use Illuminate\Support\Facades\Route;
@@ -106,6 +108,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('students/evaluations/bulk', [CoordinatorOjtEvaluationController::class, 'storeAll'])
                 ->name('students.evaluations.store-all');
 
+            Route::post('evaluation-alerts/completed/seen', [CoordinatorEvaluationAlertController::class, 'markCompletedSeen'])
+                ->name('evaluation-alerts.completed.seen');
+
             Route::resource('evaluation-templates', CoordinatorEvaluationTemplateController::class)
                 ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
 
@@ -137,6 +142,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function () {
             Route::get('dashboard', [SupervisorDashboardController::class, 'index'])
                 ->name('dashboard');
+
+            Route::post('evaluation-alerts/pending/seen', [SupervisorEvaluationAlertController::class, 'markPendingSeen'])
+                ->name('evaluation-alerts.pending.seen');
 
             Route::get('evaluations/{evaluation}', [SupervisorOjtEvaluationController::class, 'show'])
                 ->name('evaluations.show');

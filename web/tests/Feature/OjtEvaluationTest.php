@@ -475,3 +475,102 @@ it('blocks editing an evaluation template after it has been sent', function () {
         ])
         ->assertStatus(422);
 });
+
+it('flags new pending evaluations for supervisors', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    [
+        'coordinator' => $coordinator,
+        'supervisorUser' => $supervisorUser,
+        'student' => $student,
+        'template' => $template,
+    ] = createSupervisorEvaluationContext();
+
+    $this->actingAs($coordinator)
+        ->post(route('coordinators.students.evaluations.store', $student), [
+            'evaluation_template_id' => $template->id,
+        ])
+        ->assertRedirect();
+
+    $this->actingAs($supervisorUser)
+        ->get(route('supervisors.dashboard'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('evaluation_alerts.new_count', 1)
+            ->where('evaluation_alerts.pending_count', 1)
+            ->where('interns.0.pending_evaluation.is_new', true));
+
+    $this->actingAs($supervisorUser)
+        ->from(route('supervisors.dashboard'))
+        ->post(route('supervisors.evaluation-alerts.pending.seen'))
+        ->assertRedirect(route('supervisors.dashboard'));
+
+    $this->actingAs($supervisorUser)
+        ->get(route('supervisors.dashboard'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('evaluation_alerts.new_count', 0)
+            ->where('interns.0.pending_evaluation.is_new', false));
+});
+
+it('flags completed evaluations for coordinators after supervisor submission', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    [
+        'coordinator' => $coordinator,
+        'supervisorUser' => $supervisorUser,
+        'student' => $student,
+        'section' => $section,
+        'template' => $template,
+        'ratingItem' => $ratingItem,
+        'textItem' => $textItem,
+    ] = createSupervisorEvaluationContext();
+
+    $evaluation = OjtEvaluation::query()->create([
+        'student_id' => $student->id,
+        'supervisor_id' => $student->supervisor_id,
+        'opened_by_user_id' => $coordinator->id,
+        'evaluation_template_id' => $template->id,
+        'status' => OjtEvaluation::STATUS_PENDING,
+        'opened_at' => now()->subHour(),
+    ]);
+
+    $this->actingAs($supervisorUser)
+        ->patch(route('supervisors.evaluations.update', $evaluation), [
+            'evaluation_date' => now()->toDateString(),
+            'responses' => [
+                [
+                    'item_id' => $ratingItem->id,
+                    'rating' => 5,
+                ],
+                [
+                    'item_id' => $textItem->id,
+                    'text' => 'Excellent intern.',
+                ],
+            ],
+        ])
+        ->assertRedirect(route('supervisors.dashboard'));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.students.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('evaluation_alerts.new_completed_count', 1)
+            ->where('students.0.has_new_completed_evaluation', true));
+
+    $this->actingAs($coordinator)
+        ->from(route('coordinators.students.index'))
+        ->post(route('coordinators.evaluation-alerts.completed.seen'))
+        ->assertRedirect(route('coordinators.students.index'));
+
+    $section->refresh();
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.students.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('evaluation_alerts.new_completed_count', 0)
+            ->where('students.0.has_new_completed_evaluation', false));
+});

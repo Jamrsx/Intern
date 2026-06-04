@@ -39,6 +39,7 @@ import {
     markStudentDocumentsAsSeen,
     readDocumentSeenMap,
 } from '@/lib/coordinator-document-notifications';
+import { useEvaluationAlertPolling } from '@/hooks/use-evaluation-alert-polling';
 import { cn } from '@/lib/utils';
 import { index as evaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { storeAll as storeAllEvaluations } from '@/routes/coordinators/students/evaluations';
@@ -73,6 +74,19 @@ type StudentRow = {
     documents_count: number;
     has_submitted_documents: boolean;
     latest_document_uploaded_at: string | null;
+    evaluation_status: 'none' | 'pending_supervisor' | 'completed';
+    pending_evaluation: {
+        id: number;
+        template_name: string | null;
+        opened_at: string;
+    } | null;
+    latest_completed_evaluation: {
+        id: number;
+        template_name: string | null;
+        submitted_at: string | null;
+        is_new: boolean;
+    } | null;
+    has_new_completed_evaluation: boolean;
 };
 
 type CompanyGroup = {
@@ -95,8 +109,14 @@ type Props = {
         eligible: number;
         pending: number;
         without_supervisor: number;
+        new_completed?: number;
     };
     evaluation_templates: EvaluationTemplateOption[];
+    evaluation_alerts: {
+        awaiting_supervisor: number;
+        new_completed_count: number;
+        has_unread: boolean;
+    } | null;
 };
 
 const COMPANY_GROUP_STATE_KEY = 'coordinator-students-company-group-state';
@@ -132,8 +152,13 @@ function groupKey(companyId: number | null): string {
 }
 
 export default function CoordinatorStudents() {
-    const { section, students, evaluation_stats, evaluation_templates } =
-        usePage<Props>().props;
+    const {
+        section,
+        students,
+        evaluation_stats,
+        evaluation_templates,
+        evaluation_alerts,
+    } = usePage<Props>().props;
     const [search, setSearch] = useState('');
     const [openingAllEvaluations, setOpeningAllEvaluations] = useState(false);
     const [showBulkEvaluationModal, setShowBulkEvaluationModal] = useState(false);
@@ -148,6 +173,17 @@ export default function CoordinatorStudents() {
     >({});
     const [notificationsReady, setNotificationsReady] = useState(false);
     const hasShownDocumentToast = useRef(false);
+    const hasShownEvaluationToast = useRef(false);
+
+    useEvaluationAlertPolling({
+        enabled: Boolean(section),
+        reloadKeys: [
+            'evaluationAlerts',
+            'evaluation_alerts',
+            'students',
+            'evaluation_stats',
+        ],
+    });
 
     useLayoutEffect(() => {
         const storedState = readStoredCompanyGroupState();
@@ -204,6 +240,50 @@ export default function CoordinatorStudents() {
             });
         }
     }, [notificationsReady, section, unreadDocumentCount]);
+
+    useEffect(() => {
+        if (
+            !section ||
+            !evaluation_alerts?.has_unread ||
+            hasShownEvaluationToast.current
+        ) {
+            return;
+        }
+
+        hasShownEvaluationToast.current = true;
+
+        toast.success(
+            evaluation_alerts.new_completed_count === 1
+                ? '1 evaluation completed by supervisor'
+                : `${evaluation_alerts.new_completed_count} evaluations completed by supervisors`,
+            {
+                description:
+                    'Look for the Done badge in the Evaluations column.',
+                duration: 6000,
+            },
+        );
+    }, [evaluation_alerts, section]);
+
+    const markCompletedAlertsSeen = () => {
+        router.post(
+            '/coordinators/evaluation-alerts/completed/seen',
+            {},
+            {
+                preserveScroll: true,
+                only: [
+                    'evaluationAlerts',
+                    'evaluation_alerts',
+                    'students',
+                    'evaluation_stats',
+                ],
+                onSuccess: () => {
+                    console.log(
+                        'Coordinator marked completed evaluation alerts as seen',
+                    );
+                },
+            },
+        );
+    };
 
     const handleViewStudent = (student: StudentRow) => {
         if (!section) {
@@ -405,6 +485,39 @@ export default function CoordinatorStudents() {
                     </Card>
                 ) : (
                     <>
+                        {evaluation_alerts?.has_unread ? (
+                            <div className="flex flex-col gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3 text-sm">
+                                    <ClipboardList className="mt-0.5 size-5 shrink-0 text-emerald-600" />
+                                    <div>
+                                        <p className="font-semibold text-emerald-900">
+                                            {evaluation_alerts.new_completed_count ===
+                                            1
+                                                ? 'Supervisor completed an evaluation'
+                                                : `${evaluation_alerts.new_completed_count} supervisors completed evaluations`}
+                                        </p>
+                                        <p className="mt-1 text-muted-foreground">
+                                            Students with a{' '}
+                                            <span className="font-medium text-emerald-700">
+                                                Done
+                                            </span>{' '}
+                                            badge have new results ready to
+                                            review.
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="shrink-0 border-emerald-600/30"
+                                    onClick={markCompletedAlertsSeen}
+                                >
+                                    Mark as seen
+                                </Button>
+                            </div>
+                        ) : null}
+
                         {unreadDocumentCount > 0 ? (
                             <div className="flex items-start gap-3 rounded-lg border border-brand/30 bg-brand/10 px-4 py-3 text-sm text-foreground">
                                 <Bell className="mt-0.5 size-5 shrink-0 text-brand" />
@@ -599,6 +712,9 @@ export default function CoordinatorStudents() {
                                                                         Documents
                                                                     </th>
                                                                     <th className="px-4 py-3 font-medium">
+                                                                        Evaluations
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-medium">
                                                                         Status
                                                                     </th>
                                                                     <th className="px-4 py-3 text-right font-medium">
@@ -685,6 +801,36 @@ export default function CoordinatorStudents() {
                                                                                 </div>
                                                                             </td>
                                                                             <td className="px-4 py-3">
+                                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                                    {student.evaluation_status ===
+                                                                                    'pending_supervisor' ? (
+                                                                                        <Badge variant="secondary">
+                                                                                            Awaiting
+                                                                                            supervisor
+                                                                                        </Badge>
+                                                                                    ) : student.has_new_completed_evaluation ? (
+                                                                                        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                                                                                            Done
+                                                                                        </Badge>
+                                                                                    ) : student.evaluation_status ===
+                                                                                      'completed' ? (
+                                                                                        <Badge variant="outline">
+                                                                                            Completed
+                                                                                        </Badge>
+                                                                                    ) : (
+                                                                                        <Badge variant="secondary">
+                                                                                            None
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                    {student.has_new_completed_evaluation ? (
+                                                                                        <span
+                                                                                            className="size-2.5 rounded-full bg-red-600"
+                                                                                            title="New completed evaluation"
+                                                                                        />
+                                                                                    ) : null}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td className="px-4 py-3">
                                                                                 <Badge
                                                                                     variant={
                                                                                         student.is_active
@@ -713,11 +859,17 @@ export default function CoordinatorStudents() {
                                                                                             student.id,
                                                                                         )}
                                                                                         prefetch
-                                                                                        onClick={() =>
+                                                                                        onClick={() => {
                                                                                             handleViewStudent(
                                                                                                 student,
-                                                                                            )
-                                                                                        }
+                                                                                            );
+
+                                                                                            if (
+                                                                                                student.has_new_completed_evaluation
+                                                                                            ) {
+                                                                                                markCompletedAlertsSeen();
+                                                                                            }
+                                                                                        }}
                                                                                     >
                                                                                         <Eye className="mr-1 size-3.5" />
                                                                                         View

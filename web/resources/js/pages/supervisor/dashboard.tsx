@@ -1,5 +1,8 @@
-import { Head, Link, usePage } from '@inertiajs/react';
-import { Building2, ClipboardList, Clock, Users } from 'lucide-react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Bell, Building2, ClipboardList, Clock, Users } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { toast } from 'sonner';
+import { useEvaluationAlertPolling } from '@/hooks/use-evaluation-alert-polling';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +21,7 @@ type Progress = {
 type PendingEvaluation = {
     id: number;
     opened_at: string;
+    is_new?: boolean;
     template: {
         id: number;
         name: string;
@@ -56,18 +60,68 @@ type Props = {
         interns: number;
         total_rendered_hours: number;
         pending_evaluations: number;
+        new_evaluations?: number;
     };
+    evaluation_alerts: {
+        pending_count: number;
+        new_count: number;
+        has_unread: boolean;
+    } | null;
     interns: InternRow[];
 };
 
 export default function SupervisorDashboard() {
-    const { auth, supervisor, stats, interns } = usePage<Props>().props;
+    const { auth, supervisor, stats, interns, evaluation_alerts } =
+        usePage<Props>().props;
+    const hasShownEvaluationToast = useRef(false);
+
+    useEvaluationAlertPolling({
+        enabled: true,
+        reloadKeys: ['evaluationAlerts', 'evaluation_alerts', 'interns', 'stats'],
+    });
+
+    useEffect(() => {
+        if (
+            hasShownEvaluationToast.current ||
+            !evaluation_alerts?.has_unread
+        ) {
+            return;
+        }
+
+        hasShownEvaluationToast.current = true;
+
+        toast.info(
+            evaluation_alerts.new_count === 1
+                ? '1 new evaluation assigned'
+                : `${evaluation_alerts.new_count} new evaluations assigned`,
+            {
+                description:
+                    'Your coordinator sent evaluation forms. Complete them from the table below.',
+                duration: 6000,
+            },
+        );
+    }, [evaluation_alerts]);
+
+    const markPendingAlertsSeen = () => {
+        router.post(
+            '/supervisors/evaluation-alerts/pending/seen',
+            {},
+            {
+                preserveScroll: true,
+                only: ['evaluationAlerts', 'evaluation_alerts', 'interns', 'stats'],
+                onSuccess: () => {
+                    console.log('Supervisor marked pending evaluation alerts as seen');
+                },
+            },
+        );
+    };
 
     console.log('Supervisor dashboard loaded', {
         user: auth.user,
         supervisor,
         stats,
         internCount: interns.length,
+        evaluation_alerts,
     });
 
     return (
@@ -84,6 +138,34 @@ export default function SupervisorDashboard() {
                         interns assigned to you.
                     </p>
                 </div>
+
+                {evaluation_alerts?.has_unread ? (
+                    <div className="flex flex-col gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3 text-sm">
+                            <Bell className="mt-0.5 size-5 shrink-0 text-amber-600" />
+                            <div>
+                                <p className="font-semibold text-amber-900">
+                                    {evaluation_alerts.new_count === 1
+                                        ? 'New evaluation to complete'
+                                        : `${evaluation_alerts.new_count} new evaluations to complete`}
+                                </p>
+                                <p className="mt-1 text-muted-foreground">
+                                    Look for the red dot next to each intern who
+                                    needs your evaluation.
+                                </p>
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0 border-amber-600/30"
+                            onClick={markPendingAlertsSeen}
+                        >
+                            Mark as seen
+                        </Button>
+                    </div>
+                ) : null}
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <Card className="border-sidebar-border/70 shadow-sm">
@@ -302,9 +384,15 @@ export default function SupervisorDashboard() {
                                                 <td className="px-4 py-3">
                                                     {intern.pending_evaluation ? (
                                                         <div>
-                                                            <Badge variant="secondary">
-                                                                Pending
-                                                            </Badge>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <Badge variant="secondary">
+                                                                    Pending
+                                                                </Badge>
+                                                                <span
+                                                                    className="size-2.5 rounded-full bg-red-600"
+                                                                    title="Pending evaluation"
+                                                                />
+                                                            </div>
                                                             {intern
                                                                 .pending_evaluation
                                                                 .template && (
