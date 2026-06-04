@@ -91,6 +91,14 @@ class Student extends Model
     }
 
     /**
+     * @return HasOne<StudentFaceProfile, $this>
+     */
+    public function faceProfile(): HasOne
+    {
+        return $this->hasOne(StudentFaceProfile::class);
+    }
+
+    /**
      * @return HasMany<StudentDocument, $this>
      */
     public function documents(): HasMany

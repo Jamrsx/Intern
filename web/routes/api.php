@@ -3,9 +3,11 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\InternDocumentController;
 use App\Http\Controllers\Api\InternDocumentRequirementController;
+use App\Http\Controllers\Api\InternFaceController;
 use App\Http\Controllers\Api\InternPasswordController;
 use App\Http\Controllers\Api\InternProfileController;
 use App\Http\Controllers\Api\InternProgressController;
+use App\Http\Controllers\Api\InternTimeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +28,9 @@ Route::middleware('auth:api')->prefix('intern')->group(function (): void {
     Route::post('/documents', [InternDocumentController::class, 'store']);
     Route::get('/document-requirements', [InternDocumentRequirementController::class, 'index']);
     Route::post('/document-requirements/seen', [InternDocumentRequirementController::class, 'markSeen']);
+    Route::get('/time/status', [InternTimeController::class, 'status']);
+    Route::post('/time/punch', [InternTimeController::class, 'punch']);
+    Route::post('/face/enroll', [InternFaceController::class, 'enroll']);
 });
 
 Route::get('/user', function (Request $request) {
