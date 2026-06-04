@@ -3,6 +3,7 @@ import {
     Building2,
     Briefcase,
     ClipboardList,
+    FileText,
     LayoutGrid,
     Users,
 } from 'lucide-react';
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes/coordinators';
 import { index as coordinatorCompaniesIndex } from '@/routes/coordinators/companies';
+import { index as coordinatorDocumentRequirementsIndex } from '@/routes/coordinators/document-requirements';
 import { index as coordinatorEvaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { index as coordinatorStudentsIndex } from '@/routes/coordinators/students';
 import { index as coordinatorSupervisorsIndex } from '@/routes/coordinators/supervisors';
@@ -48,6 +50,11 @@ const navGroups: NavGroup[] = [
                 title: 'Evaluation Sheets',
                 href: coordinatorEvaluationTemplatesIndex(),
                 icon: ClipboardList,
+            },
+            {
+                title: 'Document Requirements',
+                href: coordinatorDocumentRequirementsIndex(),
+                icon: FileText,
             },
         ],
     },

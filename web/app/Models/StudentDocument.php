@@ -13,6 +13,7 @@ class StudentDocument extends Model
     protected $fillable = [
         'student_id',
         'document_type_id',
+        'document_requirement_id',
         'file_path',
         'original_filename',
         'file_size',
@@ -45,5 +46,13 @@ class StudentDocument extends Model
     public function documentType(): BelongsTo
     {
         return $this->belongsTo(DocumentType::class);
+    }
+
+    /**
+     * @return BelongsTo<DocumentRequirement, $this>
+     */
+    public function documentRequirement(): BelongsTo
+    {
+        return $this->belongsTo(DocumentRequirement::class);
     }
 }

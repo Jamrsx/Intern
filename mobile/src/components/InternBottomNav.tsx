@@ -5,13 +5,22 @@ import { colors } from '../theme/colors';
 type Props = {
     activeTab: InternTab;
     onTabPress: (tab: InternTab) => void;
+    docsBadgeCount?: number;
 };
 
-export function InternBottomNav({ activeTab, onTabPress }: Props) {
+export function InternBottomNav({
+    activeTab,
+    onTabPress,
+    docsBadgeCount = 0,
+}: Props) {
     return (
         <View style={styles.container}>
             {INTERN_TABS.map((tab) => {
                 const isActive = activeTab === tab.id;
+                const showDocsBadge =
+                    tab.id === 'documents' && docsBadgeCount > 0;
+                const badgeLabel =
+                    docsBadgeCount > 9 ? '9+' : String(docsBadgeCount);
 
                 return (
                     <Pressable
@@ -28,20 +37,29 @@ export function InternBottomNav({ activeTab, onTabPress }: Props) {
                         accessibilityRole="button"
                         accessibilityState={{ selected: isActive }}
                     >
-                        <View
-                            style={[
-                                styles.indicator,
-                                isActive && styles.indicatorActive,
-                            ]}
-                        />
-                        <Text
-                            style={[
-                                styles.label,
-                                isActive && styles.labelActive,
-                            ]}
-                        >
-                            {tab.label}
-                        </Text>
+                        <View style={styles.tabLabelWrap}>
+                            <View
+                                style={[
+                                    styles.indicator,
+                                    isActive && styles.indicatorActive,
+                                ]}
+                            />
+                            {showDocsBadge ? (
+                                <View style={styles.tabBadge}>
+                                    <Text style={styles.tabBadgeText}>
+                                        {badgeLabel}
+                                    </Text>
+                                </View>
+                            ) : null}
+                            <Text
+                                style={[
+                                    styles.label,
+                                    isActive && styles.labelActive,
+                                ]}
+                            >
+                                {tab.label}
+                            </Text>
+                        </View>
                     </Pressable>
                 );
             })}
@@ -71,12 +89,36 @@ const styles = StyleSheet.create({
     tabPressed: {
         opacity: 0.85,
     },
+    tabLabelWrap: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+    },
     indicator: {
         width: 28,
         height: 3,
         borderRadius: 999,
         backgroundColor: 'transparent',
         marginBottom: 6,
+    },
+    tabBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -14,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        paddingHorizontal: 4,
+        backgroundColor: '#ef4444',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: colors.background,
+    },
+    tabBadgeText: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#ffffff',
     },
     indicatorActive: {
         backgroundColor: colors.brand,

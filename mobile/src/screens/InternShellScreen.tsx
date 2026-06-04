@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { InternBottomNav } from '../components/InternBottomNav';
 import type { InternTab } from '../navigation/types';
 import { colors } from '../theme/colors';
 import type { StoredSession } from '../types/auth';
+import { useDocumentAlertPolling } from '../hooks/useDocumentAlertPolling';
 import { DocumentsScreen } from './DocumentsScreen';
 import { HomeScreen } from './HomeScreen';
 import { ProfileScreen } from './ProfileScreen';
@@ -16,15 +17,40 @@ type Props = {
 
 export function InternShellScreen({ session, onLogout }: Props) {
     const [activeTab, setActiveTab] = useState<InternTab>('home');
+    const [docsBadgeCount, setDocsBadgeCount] = useState(0);
+
+    const handleDocsBadgeChange = useCallback((count: number) => {
+        setDocsBadgeCount(count);
+    }, []);
+
+    const { refreshAlerts, acknowledgeSeen } = useDocumentAlertPolling(
+        session.accessToken,
+        handleDocsBadgeChange,
+    );
 
     const renderScreen = () => {
         switch (activeTab) {
             case 'home':
-                return <HomeScreen session={session} />;
+                return (
+                    <HomeScreen
+                        session={session}
+                        documentAlertCount={docsBadgeCount}
+                        onAcknowledgeSeen={acknowledgeSeen}
+                        onAlertsRefresh={refreshAlerts}
+                        onGoToDocuments={() => setActiveTab('documents')}
+                    />
+                );
             case 'time':
                 return <TimeScreen />;
             case 'documents':
-                return <DocumentsScreen session={session} />;
+                return (
+                    <DocumentsScreen
+                        session={session}
+                        onAcknowledgeSeen={acknowledgeSeen}
+                        onAlertsRefresh={refreshAlerts}
+                        onBadgeCountChange={handleDocsBadgeChange}
+                    />
+                );
             case 'profile':
                 return (
                     <ProfileScreen session={session} onLogout={onLogout} />
@@ -37,7 +63,11 @@ export function InternShellScreen({ session, onLogout }: Props) {
     return (
         <View style={styles.shell}>
             <View style={styles.content}>{renderScreen()}</View>
-            <InternBottomNav activeTab={activeTab} onTabPress={setActiveTab} />
+            <InternBottomNav
+                activeTab={activeTab}
+                onTabPress={setActiveTab}
+                docsBadgeCount={docsBadgeCount}
+            />
         </View>
     );
 }

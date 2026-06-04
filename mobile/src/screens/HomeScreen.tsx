@@ -9,13 +9,25 @@ import {
     View,
 } from 'react-native';
 import { fetchInternProgress } from '../api/intern';
+import { fetchInternDocumentRequirements } from '../api/documents';
 import { ApiError } from '../api/client';
+import { DocumentAlertsBell } from '../components/DocumentAlertsBell';
+import { DocumentAlertsModal } from '../components/DocumentAlertsModal';
+import {
+    mapNotificationItems,
+    resolveDocsBadgeCount,
+} from '../services/documentAlerts';
 import { colors } from '../theme/colors';
 import type { StoredSession } from '../types/auth';
+import type { DocumentNotificationItem } from '../types/documents';
 import type { InternProgressResponse } from '../types/intern';
 
 type Props = {
     session: StoredSession;
+    documentAlertCount?: number;
+    onAcknowledgeSeen?: () => Promise<void>;
+    onAlertsRefresh?: () => Promise<void>;
+    onGoToDocuments?: () => void;
 };
 
 function formatHours(value: number): string {
@@ -50,10 +62,37 @@ function getTentativeEndCaption(
     return 'Approximate · based on your OJT schedule';
 }
 
-export function HomeScreen({ session }: Props) {
+export function HomeScreen({
+    session,
+    documentAlertCount = 0,
+    onAcknowledgeSeen,
+    onAlertsRefresh,
+    onGoToDocuments,
+}: Props) {
     const [data, setData] = useState<InternProgressResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [notifications, setNotifications] = useState<
+        DocumentNotificationItem[]
+    >([]);
+    const [showAlertsModal, setShowAlertsModal] = useState(false);
+
+    const loadDocumentAlerts = useCallback(async () => {
+        try {
+            const response = await fetchInternDocumentRequirements(
+                session.accessToken,
+            );
+
+            setNotifications(mapNotificationItems(response));
+
+            console.log('Home document alerts loaded', {
+                alertCount: resolveDocsBadgeCount(response),
+                notifications: mapNotificationItems(response).length,
+            });
+        } catch (error) {
+            console.log('Home document alerts load failed', error);
+        }
+    }, [session.accessToken]);
 
     const loadProgress = useCallback(async () => {
         setIsLoading(true);
@@ -77,7 +116,26 @@ export function HomeScreen({ session }: Props) {
 
     useEffect(() => {
         loadProgress();
-    }, [loadProgress]);
+        loadDocumentAlerts();
+    }, [loadProgress, loadDocumentAlerts]);
+
+    const openAlertsModal = () => {
+        console.log('Home document alerts opened', {
+            count: notifications.length,
+        });
+        loadDocumentAlerts();
+        setShowAlertsModal(true);
+    };
+
+    const handleMarkAlertsRead = async () => {
+        if (onAcknowledgeSeen) {
+            await onAcknowledgeSeen();
+        }
+
+        await loadDocumentAlerts();
+        onAlertsRefresh?.();
+        setShowAlertsModal(false);
+    };
 
     const displayName =
         data?.student.full_name ?? session.user.name;
@@ -85,20 +143,42 @@ export function HomeScreen({ session }: Props) {
     const course = data?.course;
 
     return (
-        <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-        >
-            <View style={styles.header}>
-                <Text style={styles.heading}>OJT Progress</Text>
-                <Text style={styles.greeting}>Welcome, {displayName}</Text>
-                {course ? (
-                    <Text style={styles.courseMeta}>
-                        {course.code} • {course.name}
-                    </Text>
-                ) : null}
-            </View>
+        <>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.header}>
+                    <View style={styles.headerTopRow}>
+                        <Text style={styles.heading}>OJT Progress</Text>
+                        <DocumentAlertsBell
+                            alertCount={documentAlertCount}
+                            onPress={openAlertsModal}
+                        />
+                    </View>
+                    <Text style={styles.greeting}>Welcome, {displayName}</Text>
+                    {course ? (
+                        <Text style={styles.courseMeta}>
+                            {course.code} • {course.name}
+                        </Text>
+                    ) : null}
+                    {documentAlertCount > 0 ? (
+                        <Pressable
+                            onPress={openAlertsModal}
+                            style={({ pressed }) => [
+                                styles.alertHint,
+                                pressed && styles.alertHintPressed,
+                            ]}
+                        >
+                            <Text style={styles.alertHintText}>
+                                {documentAlertCount === 1
+                                    ? '1 document needs your attention'
+                                    : `${documentAlertCount} documents need your attention`}
+                            </Text>
+                        </Pressable>
+                    ) : null}
+                </View>
 
             {isLoading ? (
                 <View style={styles.stateCard}>
@@ -191,7 +271,23 @@ export function HomeScreen({ session }: Props) {
                     </View>
                 </>
             ) : null}
-        </ScrollView>
+            </ScrollView>
+
+            <DocumentAlertsModal
+                visible={showAlertsModal}
+                notifications={notifications}
+                onClose={() => setShowAlertsModal(false)}
+                onMarkRead={handleMarkAlertsRead}
+                onOpenDocuments={
+                    onGoToDocuments
+                        ? () => {
+                              setShowAlertsModal(false);
+                              onGoToDocuments();
+                          }
+                        : undefined
+                }
+            />
+        </>
     );
 }
 
@@ -205,6 +301,28 @@ const styles = StyleSheet.create({
     },
     header: {
         marginBottom: 20,
+    },
+    headerTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    alertHint: {
+        marginTop: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        backgroundColor: colors.brandMuted,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    alertHintPressed: {
+        opacity: 0.9,
+    },
+    alertHintText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.brand,
     },
     heading: {
         fontSize: 13,

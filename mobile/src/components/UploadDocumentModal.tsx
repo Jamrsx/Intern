@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -19,13 +19,17 @@ import {
 import { ApiError } from '../api/client';
 import { uploadInternDocument } from '../api/documents';
 import { colors } from '../theme/colors';
-import type { PickedUploadFile } from '../types/documents';
+import type {
+    InternDocumentRequirement,
+    PickedUploadFile,
+} from '../types/documents';
 
 const SUGGESTIONS = ['MOA', 'Week 1', 'Week 2', 'Week 3', 'Week 4'];
 
 type Props = {
     visible: boolean;
     accessToken: string;
+    requirement?: InternDocumentRequirement | null;
     onClose: () => void;
     onSuccess: (message: string) => void;
 };
@@ -33,6 +37,7 @@ type Props = {
 export function UploadDocumentModal({
     visible,
     accessToken,
+    requirement,
     onClose,
     onSuccess,
 }: Props) {
@@ -40,6 +45,14 @@ export function UploadDocumentModal({
     const [pickedFile, setPickedFile] = useState<PickedUploadFile | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+    const isRequirementUpload = Boolean(requirement);
+
+    useEffect(() => {
+        if (visible && requirement) {
+            setTitle(requirement.title);
+        }
+    }, [visible, requirement]);
 
     const resetForm = () => {
         setTitle('');
@@ -97,7 +110,7 @@ export function UploadDocumentModal({
     const handleSubmit = async () => {
         const trimmedTitle = title.trim();
 
-        if (!trimmedTitle) {
+        if (!isRequirementUpload && !trimmedTitle) {
             setErrorMessage('Enter a report name (e.g. MOA, Week 1).');
             return;
         }
@@ -113,8 +126,13 @@ export function UploadDocumentModal({
         try {
             const response = await uploadInternDocument(
                 accessToken,
-                trimmedTitle,
                 pickedFile,
+                {
+                    title: isRequirementUpload
+                        ? requirement?.title
+                        : trimmedTitle,
+                    documentRequirementId: requirement?.id,
+                },
             );
 
             resetForm();
@@ -123,7 +141,8 @@ export function UploadDocumentModal({
         } catch (error) {
             if (error instanceof ApiError) {
                 setErrorMessage(
-                    error.fieldErrors.title?.[0] ??
+                    error.fieldErrors.document_requirement_id?.[0] ??
+                        error.fieldErrors.title?.[0] ??
                         error.fieldErrors.file?.[0] ??
                         error.message,
                 );
@@ -154,38 +173,59 @@ export function UploadDocumentModal({
                     disabled={isSubmitting}
                 />
                 <View style={styles.card}>
-                    <Text style={styles.title}>Upload document</Text>
+                    <Text style={styles.title}>
+                        {isRequirementUpload
+                            ? `Submit ${requirement?.title}`
+                            : 'Upload document'}
+                    </Text>
                     <Text style={styles.subtitle}>
-                        Name your report, then choose a PDF or Word file.
+                        {isRequirementUpload
+                            ? 'Choose a PDF or Word file for this requirement.'
+                            : 'Name your report, then choose a PDF or Word file.'}
                     </Text>
 
-                    <Text style={styles.fieldLabel}>Report name</Text>
-                    <TextInput
-                        value={title}
-                        onChangeText={setTitle}
-                        placeholder="e.g. MOA, Week 1, Week 2"
-                        placeholderTextColor={colors.textSubtle}
-                        style={styles.input}
-                        editable={!isSubmitting}
-                    />
-
-                    <View style={styles.suggestions}>
-                        {SUGGESTIONS.map(suggestion => (
-                            <Pressable
-                                key={suggestion}
-                                onPress={() => setTitle(suggestion)}
-                                disabled={isSubmitting}
-                                style={({ pressed }) => [
-                                    styles.suggestionChip,
-                                    pressed && styles.chipPressed,
-                                ]}
-                            >
-                                <Text style={styles.suggestionText}>
-                                    {suggestion}
+                    {isRequirementUpload && requirement ? (
+                        <View style={styles.requirementBox}>
+                            <Text style={styles.requirementTitle}>
+                                {requirement.title}
+                            </Text>
+                            {requirement.description ? (
+                                <Text style={styles.requirementDescription}>
+                                    {requirement.description}
                                 </Text>
-                            </Pressable>
-                        ))}
-                    </View>
+                            ) : null}
+                        </View>
+                    ) : (
+                        <>
+                            <Text style={styles.fieldLabel}>Report name</Text>
+                            <TextInput
+                                value={title}
+                                onChangeText={setTitle}
+                                placeholder="e.g. MOA, Week 1, Week 2"
+                                placeholderTextColor={colors.textSubtle}
+                                style={styles.input}
+                                editable={!isSubmitting}
+                            />
+
+                            <View style={styles.suggestions}>
+                                {SUGGESTIONS.map(suggestion => (
+                                    <Pressable
+                                        key={suggestion}
+                                        onPress={() => setTitle(suggestion)}
+                                        disabled={isSubmitting}
+                                        style={({ pressed }) => [
+                                            styles.suggestionChip,
+                                            pressed && styles.chipPressed,
+                                        ]}
+                                    >
+                                        <Text style={styles.suggestionText}>
+                                            {suggestion}
+                                        </Text>
+                                    </Pressable>
+                                ))}
+                            </View>
+                        </>
+                    )}
 
                     <Text style={styles.fieldLabel}>File</Text>
                     <Pressable
@@ -285,6 +325,23 @@ const styles = StyleSheet.create({
         marginTop: 6,
         fontSize: 14,
         lineHeight: 20,
+        color: colors.textMuted,
+    },
+    requirementBox: {
+        marginTop: 14,
+        borderRadius: 12,
+        backgroundColor: colors.brandMuted,
+        padding: 12,
+        gap: 4,
+    },
+    requirementTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: colors.brand,
+    },
+    requirementDescription: {
+        fontSize: 13,
+        lineHeight: 18,
         color: colors.textMuted,
     },
     fieldLabel: {

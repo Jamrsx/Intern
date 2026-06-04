@@ -7,6 +7,7 @@ import {
     View,
 } from 'react-native';
 import { fetchCurrentUser } from './src/api/auth';
+import { setupDocumentNotifications } from './src/services/documentNotifications';
 import { clearSession, getSession, saveSession } from './src/storage/authStorage';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { InternShellScreen } from './src/screens/InternShellScreen';
@@ -24,6 +25,10 @@ function BootScreen() {
 export default function App() {
     const [session, setSession] = useState<StoredSession | null>(null);
     const [isBootstrapping, setIsBootstrapping] = useState(true);
+
+    useEffect(() => {
+        setupDocumentNotifications();
+    }, []);
 
     useEffect(() => {
         StatusBar.setHidden(true);

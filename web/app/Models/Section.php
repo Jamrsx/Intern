@@ -61,4 +61,12 @@ class Section extends Model
     {
         return $this->belongsTo(User::class, 'coordinator_user_id');
     }
+
+    /**
+     * @return HasMany<DocumentRequirement, $this>
+     */
+    public function documentRequirements(): HasMany
+    {
+        return $this->hasMany(DocumentRequirement::class);
+    }
 }

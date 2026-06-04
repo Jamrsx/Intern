@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\InternDocumentController;
+use App\Http\Controllers\Api\InternDocumentRequirementController;
 use App\Http\Controllers\Api\InternPasswordController;
 use App\Http\Controllers\Api\InternProfileController;
 use App\Http\Controllers\Api\InternProgressController;
@@ -23,6 +24,8 @@ Route::middleware('auth:api')->prefix('intern')->group(function (): void {
     Route::put('/password', [InternPasswordController::class, 'update']);
     Route::get('/documents', [InternDocumentController::class, 'index']);
     Route::post('/documents', [InternDocumentController::class, 'store']);
+    Route::get('/document-requirements', [InternDocumentRequirementController::class, 'index']);
+    Route::post('/document-requirements/seen', [InternDocumentRequirementController::class, 'markSeen']);
 });
 
 Route::get('/user', function (Request $request) {

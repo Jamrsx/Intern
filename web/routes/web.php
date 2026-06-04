@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Coordinator\CompanyController as CoordinatorCompanyController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
+use App\Http\Controllers\Coordinator\DocumentRequirementController as CoordinatorDocumentRequirementController;
 use App\Http\Controllers\Coordinator\EvaluationTemplateController as CoordinatorEvaluationTemplateController;
 use App\Http\Controllers\Coordinator\OjtEvaluationController as CoordinatorOjtEvaluationController;
 use App\Http\Controllers\Coordinator\StudentController as CoordinatorStudentController;
@@ -107,6 +108,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::resource('evaluation-templates', CoordinatorEvaluationTemplateController::class)
                 ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
+
+            Route::resource('document-requirements', CoordinatorDocumentRequirementController::class)
+                ->only(['index', 'store', 'update', 'destroy']);
 
             Route::get('companies/deactivated', [CoordinatorCompanyController::class, 'deactivated'])
                 ->name('companies.deactivated');

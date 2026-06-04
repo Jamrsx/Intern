@@ -23,6 +23,7 @@ class Student extends Model
         'department_id',
         'supervisor_id',
         'is_active',
+        'last_document_alerts_seen_at',
     ];
 
     /**
@@ -32,6 +33,7 @@ class Student extends Model
     {
         return [
             'is_active' => 'boolean',
+            'last_document_alerts_seen_at' => 'datetime',
         ];
     }
 
