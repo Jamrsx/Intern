@@ -54,6 +54,25 @@ class InternTimePunchService
     }
 
     /**
+     * @return array{logs: list<array<string, mixed>>, total_count: int}
+     */
+    public function history(Student $student, int $limit = 60): array
+    {
+        $logs = $student->timeLogs()
+            ->orderByDesc('time_in')
+            ->limit($limit)
+            ->get()
+            ->map(fn (TimeLog $log) => $this->logPayload($log))
+            ->values()
+            ->all();
+
+        return [
+            'logs' => $logs,
+            'total_count' => $student->timeLogs()->count(),
+        ];
+    }
+
+    /**
      * @param  list<float>  $embedding
      * @return array{message: string, profile: array<string, mixed>}
      */

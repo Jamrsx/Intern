@@ -29,6 +29,7 @@ Route::middleware('auth:api')->prefix('intern')->group(function (): void {
     Route::get('/document-requirements', [InternDocumentRequirementController::class, 'index']);
     Route::post('/document-requirements/seen', [InternDocumentRequirementController::class, 'markSeen']);
     Route::get('/time/status', [InternTimeController::class, 'status']);
+    Route::get('/time/logs', [InternTimeController::class, 'logs']);
     Route::post('/time/punch', [InternTimeController::class, 'punch']);
     Route::post('/face/enroll', [InternFaceController::class, 'enroll']);
 });

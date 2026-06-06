@@ -1,4 +1,11 @@
-import { FACE_API_CDN, FACE_API_MODEL_URL } from '../constants/face';
+import {
+    FACE_API_CDN,
+    FACE_API_MODEL_URL,
+    FACE_DESCRIPTOR_DETECTOR_INPUT_SIZE,
+    FACE_DESCRIPTOR_SCORE_THRESHOLD,
+    FACE_TRACK_DETECTOR_INPUT_SIZE,
+    FACE_TRACK_SCORE_THRESHOLD,
+} from '../constants/face';
 
 /**
  * Hidden WebView runs @vladmandic/face-api (128-D). Native camera sends JPEG
@@ -16,10 +23,19 @@ export function buildFaceScanHtml(): string {
   <script src="${FACE_API_CDN}/dist/face-api.js"></script>
   <script>
     const MODEL_URL = ${JSON.stringify(FACE_API_MODEL_URL)};
-    const DETECTOR = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.45 });
+    const TRACK_DETECTOR = new faceapi.TinyFaceDetectorOptions({
+      inputSize: ${FACE_TRACK_DETECTOR_INPUT_SIZE},
+      scoreThreshold: ${FACE_TRACK_SCORE_THRESHOLD},
+    });
+    const PROCESS_DETECTOR = new faceapi.TinyFaceDetectorOptions({
+      inputSize: ${FACE_DESCRIPTOR_DETECTOR_INPUT_SIZE},
+      scoreThreshold: ${FACE_DESCRIPTOR_SCORE_THRESHOLD},
+    });
     let modelsReady = false;
     let trackBusy = false;
     let descriptorBusy = false;
+    let trackMisses = 0;
+    let faceWasVisible = false;
 
     function post(payload) {
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -29,9 +45,11 @@ export function buildFaceScanHtml(): string {
 
     async function loadModels() {
       if (modelsReady) return;
-      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-      await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
-      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
       modelsReady = true;
       post({ type: 'models_loaded' });
     }
@@ -70,19 +88,23 @@ export function buildFaceScanHtml(): string {
       try {
         if (!modelsReady) await loadModels();
         const img = await faceapi.fetchImage(dataUrl);
-        const detection = await faceapi.detectSingleFace(img, DETECTOR);
+        const detection = await faceapi.detectSingleFace(img, TRACK_DETECTOR);
         if (!detection) {
-          post({ type: 'no_face' });
+          trackMisses += 1;
+          if (faceWasVisible && trackMisses >= 2) {
+            faceWasVisible = false;
+            post({ type: 'no_face' });
+          }
         } else {
+          trackMisses = 0;
           const box = normalizeBox(detection, img.width, img.height);
           if (box) {
+            faceWasVisible = true;
             post({ type: 'face_box', box: box });
-          } else {
-            post({ type: 'no_face' });
           }
         }
       } catch (err) {
-        post({ type: 'no_face' });
+        trackMisses += 1;
       } finally {
         trackBusy = false;
       }
@@ -95,7 +117,7 @@ export function buildFaceScanHtml(): string {
         if (!modelsReady) await loadModels();
         const img = await faceapi.fetchImage(dataUrl);
         const detection = await faceapi
-          .detectSingleFace(img, DETECTOR)
+          .detectSingleFace(img, PROCESS_DETECTOR)
           .withFaceLandmarks(true)
           .withFaceDescriptor();
         if (!detection || !detection.descriptor) {
@@ -103,6 +125,8 @@ export function buildFaceScanHtml(): string {
         } else {
           const box = normalizeBox(detection, img.width, img.height);
           if (box) {
+            faceWasVisible = true;
+            trackMisses = 0;
             post({ type: 'face_box', box: box });
           }
           post({ type: 'descriptor', descriptor: Array.from(detection.descriptor) });

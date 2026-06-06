@@ -34,10 +34,20 @@ function formatClock(value: string | null): string {
     });
 }
 
-function formatTodayHours(minutes: number): string {
-    const hours = minutes / 60;
+function formatDurationMinutes(minutes: number): string {
+    const total = Math.max(0, Math.round(minutes));
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
 
-    return Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
+    if (hours === 0) {
+        return `${mins} min`;
+    }
+
+    if (mins === 0) {
+        return `${hours} hr`;
+    }
+
+    return `${hours} hr ${mins} min`;
 }
 
 function FeedbackBanner({
@@ -56,7 +66,9 @@ function FeedbackBanner({
         >
             <Text
                 style={
-                    tone === 'error' ? styles.feedbackErrorText : styles.feedbackSuccessText
+                    tone === 'error'
+                        ? styles.feedbackErrorText
+                        : styles.feedbackSuccessText
                 }
             >
                 {message}
@@ -65,33 +77,62 @@ function FeedbackBanner({
     );
 }
 
-function SegmentRow({ segment }: { segment: TimeLogSegment }) {
+function StatusHeader({
+    todayMinutes,
+    isTimedIn,
+    timeInLabel,
+    showSession,
+}: {
+    todayMinutes: number;
+    isTimedIn: boolean;
+    timeInLabel: string;
+    showSession: boolean;
+}) {
     return (
-        <View style={styles.segmentRow}>
-            <Text style={styles.segmentTime}>
-                {formatClock(segment.time_in)}
-                {segment.time_out ? ` – ${formatClock(segment.time_out)}` : ' – …'}
+        <View style={styles.statusHeader}>
+            <Text style={styles.todayValue}>
+                {formatDurationMinutes(todayMinutes)}
             </Text>
-            <Text style={styles.segmentDuration}>
-                {segment.is_open ? 'Active' : formatSegmentDuration(segment.duration_minutes)}
-            </Text>
+            <Text style={styles.todayCaption}>logged today</Text>
+            {showSession ? (
+                <View style={styles.sessionRow}>
+                    {isTimedIn ? <View style={styles.sessionDot} /> : null}
+                    <Text style={styles.sessionText}>
+                        {isTimedIn
+                            ? `Timed in since ${timeInLabel}`
+                            : 'Not timed in'}
+                    </Text>
+                </View>
+            ) : null}
         </View>
     );
 }
 
-function formatSegmentDuration(minutes: number | null): string {
-    if (minutes === null) {
-        return '';
-    }
+function SegmentRow({ segment }: { segment: TimeLogSegment }) {
+    const duration = segment.is_open
+        ? 'Active'
+        : segment.duration_minutes !== null
+          ? formatDurationMinutes(segment.duration_minutes)
+          : '';
 
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-
-    if (h === 0) {
-        return `${m}m`;
-    }
-
-    return `${h}h ${m}m`;
+    return (
+        <View style={styles.segmentRow}>
+            <Text style={styles.segmentTime}>
+                {formatClock(segment.time_in)}
+                {segment.time_out
+                    ? ` – ${formatClock(segment.time_out)}`
+                    : ' – now'}
+            </Text>
+            <Text
+                style={[
+                    styles.segmentDuration,
+                    segment.is_open && styles.segmentDurationActive,
+                ]}
+            >
+                {duration}
+            </Text>
+        </View>
+    );
 }
 
 export function TimeScreen({ session }: Props) {
@@ -217,22 +258,22 @@ export function TimeScreen({ session }: Props) {
     const isTimedIn = Boolean(status?.open_log);
     const todayMinutes = status?.today_minutes ?? 0;
     const segments = status?.today_segments ?? [];
-
-    const sessionHint = isTimedIn
-        ? `Timed in since ${formatClock(status?.open_log?.time_in ?? null)}`
-        : 'You are not timed in';
+    const timeInLabel = formatClock(status?.open_log?.time_in ?? null);
 
     return (
         <View style={styles.page}>
-            <View style={styles.fixedSection}>
-                <View style={styles.headerRow}>
-                    <Text style={styles.title}>Time</Text>
-                    <View style={styles.todayPill}>
-                        <Text style={styles.todayPillText}>
-                            {formatTodayHours(todayMinutes)}h today
-                        </Text>
-                    </View>
-                </View>
+            <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                <StatusHeader
+                    todayMinutes={todayMinutes}
+                    isTimedIn={isTimedIn}
+                    timeInLabel={timeInLabel}
+                    showSession={faceEnrolled}
+                />
 
                 {feedback ? (
                     <FeedbackBanner
@@ -242,12 +283,15 @@ export function TimeScreen({ session }: Props) {
                 ) : null}
 
                 {!faceEnrolled ? (
-                    <View style={styles.block}>
+                    <View style={styles.setupBlock}>
                         {enrollStep === 'intro' ? (
                             <>
-                                <Text style={styles.lead}>
-                                    Set up your face once. After that, use Time in
-                                    and Time out below.
+                                <Text style={styles.setupTitle}>
+                                    Face setup required
+                                </Text>
+                                <Text style={styles.setupText}>
+                                    Scan your face once to use Time in and Time
+                                    out.
                                 </Text>
                                 <Pressable
                                     style={styles.primaryButton}
@@ -264,10 +308,15 @@ export function TimeScreen({ session }: Props) {
                                     isActive
                                     mode="enroll"
                                     isSubmitting={isWorking}
-                                    onEnrollmentComplete={handleEnrollmentComplete}
+                                    onEnrollmentComplete={
+                                        handleEnrollmentComplete
+                                    }
                                     onVerifyComplete={() => {}}
                                     onError={(message) =>
-                                        setFeedback({ message, tone: 'error' })
+                                        setFeedback({
+                                            message,
+                                            tone: 'error',
+                                        })
                                     }
                                     onScanningChange={setIsWorking}
                                 />
@@ -284,9 +333,7 @@ export function TimeScreen({ session }: Props) {
                         )}
                     </View>
                 ) : (
-                    <>
-                        <Text style={styles.sessionHint}>{sessionHint}</Text>
-
+                    <View style={styles.mainBlock}>
                         <EmbeddedFaceScanner
                             isActive
                             mode="verify"
@@ -300,20 +347,15 @@ export function TimeScreen({ session }: Props) {
                             onScanningChange={setIsWorking}
                         />
 
-                        <Text style={styles.scanHint}>
-                            {isWorking
-                                ? 'Hold still…'
-                                : 'Keep your face in the blue box, then tap a button'}
-                        </Text>
-
                         <View style={styles.punchRow}>
                             <Pressable
                                 disabled={isWorking || !status?.can_punch_in}
-                                style={[
+                                style={({ pressed }) => [
                                     styles.punchButton,
                                     styles.punchIn,
                                     (isWorking || !status?.can_punch_in) &&
                                         styles.buttonDisabled,
+                                    pressed && styles.buttonPressed,
                                 ]}
                                 onPress={() => requestPunchScan('time_in')}
                             >
@@ -321,35 +363,35 @@ export function TimeScreen({ session }: Props) {
                             </Pressable>
                             <Pressable
                                 disabled={isWorking || !status?.can_punch_out}
-                                style={[
+                                style={({ pressed }) => [
                                     styles.punchButton,
                                     styles.punchOut,
                                     (isWorking || !status?.can_punch_out) &&
                                         styles.buttonDisabled,
+                                    pressed && styles.buttonPressed,
                                 ]}
                                 onPress={() => requestPunchScan('time_out')}
                             >
                                 <Text style={styles.punchOutText}>Time out</Text>
                             </Pressable>
                         </View>
-                    </>
-                )}
-            </View>
 
-            {faceEnrolled && segments.length > 0 ? (
-                <ScrollView
-                    style={styles.logScroll}
-                    contentContainerStyle={styles.logScrollContent}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    <View style={styles.logBlock}>
-                        <Text style={styles.logTitle}>Today</Text>
-                        {segments.map((segment) => (
-                            <SegmentRow key={segment.id} segment={segment} />
-                        ))}
+                        {segments.length > 0 ? (
+                            <View style={styles.logCard}>
+                                <Text style={styles.logTitle}>Today</Text>
+                                {segments.map((segment, index) => (
+                                    <View key={segment.id}>
+                                        <SegmentRow segment={segment} />
+                                        {index < segments.length - 1 ? (
+                                            <View style={styles.segmentDivider} />
+                                        ) : null}
+                                    </View>
+                                ))}
+                            </View>
+                        ) : null}
                     </View>
-                </ScrollView>
-            ) : null}
+                )}
+            </ScrollView>
         </View>
     );
 }
@@ -357,56 +399,60 @@ export function TimeScreen({ session }: Props) {
 const styles = StyleSheet.create({
     page: {
         flex: 1,
+        backgroundColor: colors.background,
     },
-    fixedSection: {
-        paddingHorizontal: 20,
-        paddingTop: 4,
-        paddingBottom: 14,
-        gap: 14,
-    },
-    logScroll: {
+    scroll: {
         flex: 1,
     },
-    logScrollContent: {
+    scrollContent: {
         paddingHorizontal: 20,
-        paddingBottom: 28,
-    },
-    screen: {
-        paddingHorizontal: 20,
-        paddingTop: 4,
-        paddingBottom: 28,
-        gap: 14,
+        paddingTop: 8,
+        paddingBottom: 32,
+        gap: 16,
     },
     centered: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    headerRow: {
-        flexDirection: 'row',
+    statusHeader: {
         alignItems: 'center',
-        justifyContent: 'space-between',
+        paddingVertical: 8,
+        gap: 4,
     },
-    title: {
-        fontSize: 24,
+    todayValue: {
+        fontSize: 32,
         fontWeight: '700',
         color: colors.text,
+        letterSpacing: -0.5,
     },
-    todayPill: {
-        backgroundColor: colors.brandMuted,
-        borderRadius: 20,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
+    todayCaption: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.textMuted,
     },
-    todayPillText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: colors.brand,
+    sessionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 6,
+    },
+    sessionDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: colors.success,
+    },
+    sessionText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: colors.textMuted,
+        textAlign: 'center',
     },
     feedback: {
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
     },
     feedbackError: {
         backgroundColor: colors.errorBackground,
@@ -418,63 +464,73 @@ const styles = StyleSheet.create({
         color: colors.error,
         fontSize: 14,
         lineHeight: 20,
+        textAlign: 'center',
     },
     feedbackSuccessText: {
         color: colors.success,
         fontSize: 14,
         lineHeight: 20,
+        textAlign: 'center',
     },
-    block: {
+    setupBlock: {
         gap: 14,
     },
-    lead: {
-        fontSize: 15,
-        lineHeight: 22,
-        color: colors.textMuted,
-    },
-    sessionHint: {
-        fontSize: 15,
+    setupTitle: {
+        fontSize: 17,
         fontWeight: '600',
         color: colors.text,
+        textAlign: 'center',
     },
-    scanHint: {
-        fontSize: 13,
+    setupText: {
+        fontSize: 14,
+        lineHeight: 21,
         color: colors.textMuted,
         textAlign: 'center',
     },
+    mainBlock: {
+        gap: 16,
+    },
     punchRow: {
         flexDirection: 'row',
-        gap: 12,
+        gap: 10,
     },
     punchButton: {
         flex: 1,
+        minHeight: 52,
         borderRadius: 14,
-        paddingVertical: 16,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     punchIn: {
         backgroundColor: colors.brand,
     },
     punchOut: {
-        backgroundColor: colors.background,
-        borderWidth: 2,
-        borderColor: colors.brand,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
     },
     punchInText: {
         color: colors.brandForeground,
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: '700',
     },
     punchOutText: {
-        color: colors.brand,
-        fontSize: 17,
+        color: colors.text,
+        fontSize: 16,
         fontWeight: '700',
+    },
+    buttonPressed: {
+        opacity: 0.88,
+    },
+    buttonDisabled: {
+        opacity: 0.4,
     },
     primaryButton: {
         backgroundColor: colors.brand,
         borderRadius: 14,
-        paddingVertical: 16,
+        minHeight: 52,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     primaryButtonText: {
         color: colors.brandForeground,
@@ -490,36 +546,45 @@ const styles = StyleSheet.create({
         color: colors.textMuted,
         fontWeight: '500',
     },
-    buttonDisabled: {
-        opacity: 0.45,
-    },
-    logBlock: {
-        marginTop: 4,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-        gap: 8,
+    logCard: {
+        backgroundColor: colors.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        gap: 4,
     },
     logTitle: {
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '600',
         color: colors.textMuted,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        letterSpacing: 0.6,
+        marginBottom: 4,
     },
     segmentRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 6,
+        paddingVertical: 10,
     },
     segmentTime: {
-        fontSize: 15,
+        flex: 1,
+        fontSize: 14,
         color: colors.text,
+        marginRight: 12,
     },
     segmentDuration: {
-        fontSize: 14,
+        fontSize: 13,
         color: colors.textMuted,
-        fontWeight: '500',
+        fontWeight: '600',
+    },
+    segmentDurationActive: {
+        color: colors.success,
+    },
+    segmentDivider: {
+        height: 1,
+        backgroundColor: colors.border,
     },
 });

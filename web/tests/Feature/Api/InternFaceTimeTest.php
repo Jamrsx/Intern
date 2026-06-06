@@ -93,6 +93,37 @@ it('times in and out with embedded facial verification', function () {
     expect($openLog->duration_minutes)->toBeGreaterThanOrEqual(0);
 });
 
+it('returns time log history for an intern', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['student' => $student] = createCoordinatorWithSection();
+
+    TimeLog::query()->create([
+        'student_id' => $student->id,
+        'time_in' => now()->subDays(2)->setTime(9, 0),
+        'time_out' => now()->subDays(2)->setTime(12, 0),
+        'duration_minutes' => 180,
+        'verification_method' => 'facial_recognition_embedded',
+    ]);
+
+    TimeLog::query()->create([
+        'student_id' => $student->id,
+        'time_in' => now()->subDay()->setTime(8, 30),
+        'time_out' => now()->subDay()->setTime(17, 0),
+        'duration_minutes' => 510,
+        'verification_method' => 'facial_recognition_embedded',
+    ]);
+
+    Passport::actingAs($student->user);
+
+    $this->getJson('/api/intern/time/logs')
+        ->assertSuccessful()
+        ->assertJsonCount(2, 'logs')
+        ->assertJsonPath('total_count', 2)
+        ->assertJsonPath('logs.0.duration_minutes', 510);
+});
+
 it('rejects punch when embedded face does not match', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);

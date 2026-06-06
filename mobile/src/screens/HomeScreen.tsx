@@ -10,9 +10,11 @@ import {
 } from 'react-native';
 import { fetchInternProgress } from '../api/intern';
 import { fetchInternDocumentRequirements } from '../api/documents';
+import { fetchInternTimeLogs } from '../api/time';
 import { ApiError } from '../api/client';
 import { DocumentAlertsBell } from '../components/DocumentAlertsBell';
 import { DocumentAlertsModal } from '../components/DocumentAlertsModal';
+import { TimeRecordsModal } from '../components/TimeRecordsModal';
 import {
     mapNotificationItems,
     resolveDocsBadgeCount,
@@ -21,6 +23,7 @@ import { colors } from '../theme/colors';
 import type { StoredSession } from '../types/auth';
 import type { DocumentNotificationItem } from '../types/documents';
 import type { InternProgressResponse } from '../types/intern';
+import type { TimeLogSegment } from '../types/time';
 
 type Props = {
     session: StoredSession;
@@ -76,6 +79,11 @@ export function HomeScreen({
         DocumentNotificationItem[]
     >([]);
     const [showAlertsModal, setShowAlertsModal] = useState(false);
+    const [showTimeRecordsModal, setShowTimeRecordsModal] = useState(false);
+    const [timeLogs, setTimeLogs] = useState<TimeLogSegment[]>([]);
+    const [timeLogsTotal, setTimeLogsTotal] = useState(0);
+    const [isLoadingTimeLogs, setIsLoadingTimeLogs] = useState(false);
+    const [timeLogsError, setTimeLogsError] = useState<string | null>(null);
 
     const loadDocumentAlerts = useCallback(async () => {
         try {
@@ -135,6 +143,36 @@ export function HomeScreen({
         await loadDocumentAlerts();
         onAlertsRefresh?.();
         setShowAlertsModal(false);
+    };
+
+    const loadTimeLogs = useCallback(async () => {
+        setIsLoadingTimeLogs(true);
+        setTimeLogsError(null);
+
+        try {
+            const response = await fetchInternTimeLogs(session.accessToken);
+            setTimeLogs(response.logs);
+            setTimeLogsTotal(response.total_count);
+            console.log('Home time records loaded', {
+                shown: response.logs.length,
+                total: response.total_count,
+            });
+        } catch (error) {
+            const message =
+                error instanceof ApiError
+                    ? error.message
+                    : 'Unable to load time records.';
+            setTimeLogsError(message);
+            console.log('Home time records load failed', error);
+        } finally {
+            setIsLoadingTimeLogs(false);
+        }
+    }, [session.accessToken]);
+
+    const openTimeRecordsModal = () => {
+        console.log('Home time records opened');
+        setShowTimeRecordsModal(true);
+        loadTimeLogs();
     };
 
     const displayName =
@@ -198,7 +236,13 @@ export function HomeScreen({
 
             {!isLoading && progress && !errorMessage ? (
                 <>
-                    <View style={styles.heroCard}>
+                    <Pressable
+                        onPress={openTimeRecordsModal}
+                        style={({ pressed }) => [
+                            styles.heroCard,
+                            pressed && styles.heroCardPressed,
+                        ]}
+                    >
                         <Text style={styles.heroLabel}>Hours remaining</Text>
                         <Text style={styles.heroValue}>
                             {formatHours(progress.remaining_hours)}
@@ -219,7 +263,8 @@ export function HomeScreen({
                             {progress.percent_complete}% of required hours
                             completed
                         </Text>
-                    </View>
+                        <Text style={styles.heroHint}>Tap to view time records</Text>
+                    </Pressable>
 
                     {progress.estimated_end_date ? (
                         <View style={styles.endDateCard}>
@@ -286,6 +331,16 @@ export function HomeScreen({
                           }
                         : undefined
                 }
+            />
+
+            <TimeRecordsModal
+                visible={showTimeRecordsModal}
+                logs={timeLogs}
+                totalCount={timeLogsTotal}
+                isLoading={isLoadingTimeLogs}
+                errorMessage={timeLogsError}
+                onClose={() => setShowTimeRecordsModal(false)}
+                onRetry={loadTimeLogs}
             />
         </>
     );
@@ -389,6 +444,9 @@ const styles = StyleSheet.create({
             },
         }),
     },
+    heroCardPressed: {
+        opacity: 0.92,
+    },
     heroLabel: {
         fontSize: 14,
         fontWeight: '600',
@@ -426,6 +484,12 @@ const styles = StyleSheet.create({
         fontSize: 13,
         color: 'rgba(255, 255, 255, 0.88)',
         textAlign: 'center',
+    },
+    heroHint: {
+        marginTop: 12,
+        fontSize: 12,
+        fontWeight: '600',
+        color: 'rgba(255, 255, 255, 0.78)',
     },
     endDateCard: {
         marginTop: 16,

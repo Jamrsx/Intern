@@ -20,6 +20,11 @@ export type InternTimeStatusResponse = {
     today_hours: number;
 };
 
+export type InternTimeLogsResponse = {
+    logs: TimeLogSegment[];
+    total_count: number;
+};
+
 export type InternTimePunchResponse = {
     message: string;
     log: TimeLogSegment;

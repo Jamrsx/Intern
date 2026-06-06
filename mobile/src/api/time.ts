@@ -2,6 +2,7 @@ import { getApiBaseUrl } from '../config/api.environment';
 import { ApiError } from './client';
 import type {
     InternFaceEnrollResponse,
+    InternTimeLogsResponse,
     InternTimePunchResponse,
     InternTimeStatusResponse,
 } from '../types/time';
@@ -69,6 +70,39 @@ export async function fetchInternTimeStatus(
     });
 
     return payload as InternTimeStatusResponse;
+}
+
+export async function fetchInternTimeLogs(
+    token: string,
+): Promise<InternTimeLogsResponse> {
+    const url = `${getApiBaseUrl()}/api/intern/time/logs`;
+
+    console.log('API request', { method: 'GET', url });
+
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    const payload = await parseJsonResponse(response);
+
+    if (!response.ok) {
+        throw buildValidationError(
+            payload,
+            'Unable to load time records.',
+            response.status,
+        );
+    }
+
+    console.log('Intern time logs loaded', {
+        count: (payload as InternTimeLogsResponse)?.logs?.length ?? 0,
+        total: (payload as InternTimeLogsResponse)?.total_count ?? 0,
+    });
+
+    return payload as InternTimeLogsResponse;
 }
 
 export async function enrollInternFace(

@@ -31,6 +31,21 @@ class InternTimeController extends Controller
         );
     }
 
+    public function logs(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user->hasRole('intern')) {
+            abort(403, 'This endpoint is for intern accounts only.');
+        }
+
+        $student = $this->internStudent($user->id);
+
+        return response()->json(
+            $this->internTimePunchService->history($student),
+        );
+    }
+
     public function punch(PunchInternTimeRequest $request): JsonResponse
     {
         $user = $request->user();

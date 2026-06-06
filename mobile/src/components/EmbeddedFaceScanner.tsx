@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     LayoutChangeEvent,
-    Platform,
     Pressable,
     StyleSheet,
     Text,
@@ -17,6 +16,11 @@ import {
 import {
     ENROLLMENT_FLASH_COLORS,
     ENROLLMENT_SCAN_COUNT,
+    FACE_BOX_SMOOTH_BLEND,
+    FACE_DESCRIPTOR_SNAPSHOT_QUALITY,
+    FACE_ENROLL_DESCRIPTOR_INTERVAL_MS,
+    FACE_TRACK_MIN_INTERVAL_MS,
+    FACE_TRACK_SNAPSHOT_QUALITY,
 } from '../constants/face';
 import { colors } from '../theme/colors';
 import type { FaceScanPhase, FaceWebViewMessage, NormalizedFaceBox } from '../types/face';
@@ -57,7 +61,7 @@ function smoothBox(
         return next;
     }
 
-    const blend = 0.4;
+    const blend = FACE_BOX_SMOOTH_BLEND;
 
     return {
         x: previous.x * (1 - blend) + next.x * blend,
@@ -84,10 +88,10 @@ export function EmbeddedFaceScanner({
     });
     const deviceFallback = useCameraDevice('front');
     const device = deviceWide ?? deviceFallback;
-    const isAndroid = Platform.OS === 'android';
     const cameraRef = useRef<Camera>(null);
     const processorRef = useRef<FaceProcessorHandle>(null);
-    const trackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const trackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const trackLoopActiveRef = useRef(false);
     const enrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const capturingRef = useRef(false);
     const faceVisibleRef = useRef(false);
@@ -102,7 +106,6 @@ export function EmbeddedFaceScanner({
     const [previewWidth, setPreviewWidth] = useState(0);
     const [cameraInitialized, setCameraInitialized] = useState(false);
     const [previewStarted, setPreviewStarted] = useState(false);
-    const [processorMounted, setProcessorMounted] = useState(false);
 
     const captureReady =
         cameraInitialized &&
@@ -110,9 +113,11 @@ export function EmbeddedFaceScanner({
         previewWidth > 0;
 
     const stopTrackLoop = useCallback(() => {
-        if (trackIntervalRef.current) {
-            clearInterval(trackIntervalRef.current);
-            trackIntervalRef.current = null;
+        trackLoopActiveRef.current = false;
+
+        if (trackTimeoutRef.current) {
+            clearTimeout(trackTimeoutRef.current);
+            trackTimeoutRef.current = null;
         }
     }, []);
 
@@ -123,53 +128,80 @@ export function EmbeddedFaceScanner({
         }
     }, []);
 
-    const captureSnapshot = useCallback(async (): Promise<string | null> => {
-        if (!cameraRef.current || capturingRef.current || !captureReady) {
-            return null;
-        }
+    const captureSnapshot = useCallback(
+        async (quality: number): Promise<string | null> => {
+            if (!cameraRef.current || capturingRef.current || !captureReady) {
+                return null;
+            }
 
-        capturingRef.current = true;
+            capturingRef.current = true;
 
-        try {
-            const photo = await cameraRef.current.takeSnapshot({
-                quality: 70,
-            });
-            const path = photo.path.replace('file://', '');
-            const base64 = await ReactNativeBlobUtil.fs.readFile(path, 'base64');
+            try {
+                const photo = await cameraRef.current.takeSnapshot({
+                    quality,
+                });
+                const path = photo.path.replace('file://', '');
+                const base64 = await ReactNativeBlobUtil.fs.readFile(
+                    path,
+                    'base64',
+                );
 
-            return `data:image/jpeg;base64,${base64}`;
-        } catch (error) {
-            console.log('Frame capture failed', error);
+                return `data:image/jpeg;base64,${base64}`;
+            } catch (error) {
+                console.log('Frame capture failed', error);
 
-            return null;
-        } finally {
-            capturingRef.current = false;
-        }
-    }, [captureReady]);
+                return null;
+            } finally {
+                capturingRef.current = false;
+            }
+        },
+        [captureReady],
+    );
 
     const runTrackFrame = useCallback(async () => {
-        if (!modelsReady || phase === 'submitting' || !isActive || !processorMounted) {
+        if (!modelsReady || phase === 'submitting' || !isActive) {
             return;
         }
 
-        const dataUrl = await captureSnapshot();
+        const dataUrl = await captureSnapshot(FACE_TRACK_SNAPSHOT_QUALITY);
 
         if (dataUrl) {
             processorRef.current?.trackSnapshot(dataUrl);
         }
-    }, [captureSnapshot, isActive, modelsReady, phase, processorMounted]);
+    }, [captureSnapshot, isActive, modelsReady, phase]);
+
+    const startTrackLoop = useCallback(() => {
+        stopTrackLoop();
+        trackLoopActiveRef.current = true;
+
+        const tick = async () => {
+            if (!trackLoopActiveRef.current) {
+                return;
+            }
+
+            await runTrackFrame();
+
+            if (!trackLoopActiveRef.current) {
+                return;
+            }
+
+            trackTimeoutRef.current = setTimeout(tick, FACE_TRACK_MIN_INTERVAL_MS);
+        };
+
+        void tick();
+    }, [runTrackFrame, stopTrackLoop]);
 
     const runDescriptorFrame = useCallback(async () => {
-        if (!modelsReady || phase === 'submitting' || !isActive || !processorMounted) {
+        if (!modelsReady || phase === 'submitting' || !isActive) {
             return;
         }
 
-        const dataUrl = await captureSnapshot();
+        const dataUrl = await captureSnapshot(FACE_DESCRIPTOR_SNAPSHOT_QUALITY);
 
         if (dataUrl) {
             processorRef.current?.processSnapshot(dataUrl);
         }
-    }, [captureSnapshot, isActive, modelsReady, phase, processorMounted]);
+    }, [captureSnapshot, isActive, modelsReady, phase]);
 
     const handleDescriptor = useCallback(
         (descriptor: number[]) => {
@@ -253,14 +285,17 @@ export function EmbeddedFaceScanner({
             if (message.type === 'no_face') {
                 faceVisibleRef.current = false;
                 setFaceBox(null);
-                setPhase('idle');
-                onScanningChange?.(false);
-                setStatusText(
-                    message.message ?? 'Looking for your face…',
-                );
 
-                if (message.message && mode === 'verify') {
-                    onError(message.message);
+                if (message.message) {
+                    setPhase('idle');
+                    onScanningChange?.(false);
+                    setStatusText(message.message);
+
+                    if (mode === 'verify') {
+                        onError(message.message);
+                    }
+                } else {
+                    setStatusText('Looking for your face…');
                 }
 
                 return;
@@ -299,7 +334,6 @@ export function EmbeddedFaceScanner({
             setFaceBox(null);
             setCameraInitialized(false);
             setPreviewStarted(false);
-            setProcessorMounted(false);
             onScanningChange?.(false);
 
             return;
@@ -318,24 +352,28 @@ export function EmbeddedFaceScanner({
     ]);
 
     useEffect(() => {
-        if (!isActive || !modelsReady || !captureReady || phase === 'submitting') {
+        if (
+            !isActive ||
+            !modelsReady ||
+            !captureReady ||
+            phase === 'submitting' ||
+            (mode === 'verify' && phase === 'scanning')
+        ) {
             stopTrackLoop();
 
             return;
         }
 
-        runTrackFrame();
-        trackIntervalRef.current = setInterval(runTrackFrame, isAndroid ? 600 : 450);
+        startTrackLoop();
 
         return stopTrackLoop;
     }, [
         captureReady,
         isActive,
-        isAndroid,
+        mode,
         modelsReady,
         phase,
-        processorMounted,
-        runTrackFrame,
+        startTrackLoop,
         stopTrackLoop,
     ]);
 
@@ -357,7 +395,7 @@ export function EmbeddedFaceScanner({
             if (faceVisibleRef.current) {
                 runDescriptorFrame();
             }
-        }, 1200);
+        }, FACE_ENROLL_DESCRIPTOR_INTERVAL_MS);
 
         return stopEnrollLoop;
     }, [
@@ -445,7 +483,6 @@ export function EmbeddedFaceScanner({
                     onPreviewStarted={() => {
                         console.log('Camera preview started');
                         setPreviewStarted(true);
-                        setProcessorMounted(true);
                         setStatusText(
                             modelsReady
                                 ? mode === 'enroll'
@@ -494,12 +531,10 @@ export function EmbeddedFaceScanner({
                 <Text style={styles.statusText}>{statusText}</Text>
             </View>
 
-            {processorMounted ? (
-                <FaceProcessorWebView
-                    ref={processorRef}
-                    onMessage={handleWebViewMessage}
-                />
-            ) : null}
+            <FaceProcessorWebView
+                ref={processorRef}
+                onMessage={handleWebViewMessage}
+            />
         </View>
     );
 }
