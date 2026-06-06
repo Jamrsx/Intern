@@ -15,6 +15,12 @@ import {
 } from '../api/time';
 import { ApiError } from '../api/client';
 import { EmbeddedFaceScanner } from '../components/EmbeddedFaceScanner';
+import { PUNCH_COOLDOWN_MS } from '../constants/face';
+import { euclideanDistance, faceMatches } from '../face/faceMatcher';
+import {
+    getEnrolledFaceEmbedding,
+    saveEnrolledFaceEmbedding,
+} from '../storage/faceEmbeddingStorage';
 import { colors } from '../theme/colors';
 import type { StoredSession } from '../types/auth';
 import type { InternTimeStatusResponse, TimeLogSegment } from '../types/time';
@@ -50,6 +56,13 @@ function formatDurationMinutes(minutes: number): string {
     return `${hours} hr ${mins} min`;
 }
 
+function formatCooldown(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
 function FeedbackBanner({
     message,
     tone,
@@ -82,11 +95,13 @@ function StatusHeader({
     isTimedIn,
     timeInLabel,
     showSession,
+    lunchHint,
 }: {
     todayMinutes: number;
     isTimedIn: boolean;
     timeInLabel: string;
     showSession: boolean;
+    lunchHint: string | null;
 }) {
     return (
         <View style={styles.statusHeader}>
@@ -98,9 +113,10 @@ function StatusHeader({
                 <View style={styles.sessionRow}>
                     {isTimedIn ? <View style={styles.sessionDot} /> : null}
                     <Text style={styles.sessionText}>
-                        {isTimedIn
-                            ? `Timed in since ${timeInLabel}`
-                            : 'Not timed in'}
+                        {lunchHint ??
+                            (isTimedIn
+                                ? `Timed in since ${timeInLabel}`
+                                : 'Not timed in')}
                     </Text>
                 </View>
             ) : null}
@@ -143,15 +159,45 @@ export function TimeScreen({ session }: Props) {
         message: string;
         tone: 'error' | 'success';
     } | null>(null);
-    const [scanRequestId, setScanRequestId] = useState(0);
     const [enrollStep, setEnrollStep] = useState<'intro' | 'scanning'>('intro');
-    const pendingPunchRef = useRef<'time_in' | 'time_out' | null>(null);
+    const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
+    const punchCooldownUntilRef = useRef(0);
+    const punchInFlightRef = useRef(false);
+    const statusRef = useRef<InternTimeStatusResponse | null>(null);
+    const enrolledEmbeddingRef = useRef<number[] | null>(null);
+    const userId = session.user.id;
+
+    const syncEnrolledEmbedding = useCallback(
+        async (embedding: number[] | null | undefined) => {
+            if (embedding && embedding.length === 128) {
+                enrolledEmbeddingRef.current = embedding;
+                await saveEnrolledFaceEmbedding(userId, embedding);
+                return;
+            }
+
+            const stored = await getEnrolledFaceEmbedding(userId);
+            enrolledEmbeddingRef.current = stored;
+        },
+        [userId],
+    );
 
     const loadStatus = useCallback(async () => {
         try {
             const response = await fetchInternTimeStatus(session.accessToken);
             setStatus(response);
-            console.log('Time screen status refreshed', response);
+            statusRef.current = response;
+
+            if (response.face_enrolled) {
+                await syncEnrolledEmbedding(response.face_embedding);
+            } else {
+                enrolledEmbeddingRef.current = null;
+            }
+
+            console.log('Time screen status refreshed', {
+                canPunchIn: response.can_punch_in,
+                canPunchOut: response.can_punch_out,
+                hasLocalEmbedding: enrolledEmbeddingRef.current !== null,
+            });
         } catch (error) {
             const message =
                 error instanceof ApiError
@@ -162,11 +208,33 @@ export function TimeScreen({ session }: Props) {
         } finally {
             setIsLoading(false);
         }
-    }, [session.accessToken]);
+    }, [session.accessToken, syncEnrolledEmbedding]);
 
     useEffect(() => {
         loadStatus();
     }, [loadStatus]);
+
+    useEffect(() => {
+        const intervalId = setInterval(() => {
+            const secondsLeft = Math.max(
+                0,
+                Math.ceil((punchCooldownUntilRef.current - Date.now()) / 1000),
+            );
+            setCooldownSecondsLeft((previous) =>
+                previous === secondsLeft ? previous : secondsLeft,
+            );
+        }, 1000);
+
+        return () => clearInterval(intervalId);
+    }, []);
+
+    const startPunchCooldown = useCallback(() => {
+        punchCooldownUntilRef.current = Date.now() + PUNCH_COOLDOWN_MS;
+        setCooldownSecondsLeft(Math.ceil(PUNCH_COOLDOWN_MS / 1000));
+        console.log('Punch cooldown started', {
+            minutes: PUNCH_COOLDOWN_MS / 60000,
+        });
+    }, []);
 
     const handleEnrollmentComplete = useCallback(
         async (embedding: number[]) => {
@@ -179,6 +247,8 @@ export function TimeScreen({ session }: Props) {
                     embedding,
                 );
                 setFeedback({ message: result.message, tone: 'success' });
+                enrolledEmbeddingRef.current = embedding;
+                await saveEnrolledFaceEmbedding(userId, embedding);
                 setEnrollStep('intro');
                 await loadStatus();
             } catch (error) {
@@ -191,11 +261,25 @@ export function TimeScreen({ session }: Props) {
                 setIsWorking(false);
             }
         },
-        [loadStatus, session.accessToken],
+        [loadStatus, session.accessToken, userId],
     );
+
+    const rejectFaceMatch = useCallback((distance: number | null) => {
+        console.log('Face match rejected', { distance });
+        setFeedback({
+            message: 'Face not recognized. Only the enrolled student can time in or out.',
+            tone: 'error',
+        });
+        setIsWorking(false);
+    }, []);
 
     const handleVerifyComplete = useCallback(
         async (embedding: number[], action: 'time_in' | 'time_out') => {
+            if (punchInFlightRef.current) {
+                return;
+            }
+
+            punchInFlightRef.current = true;
             setIsWorking(true);
             setFeedback(null);
 
@@ -207,7 +291,8 @@ export function TimeScreen({ session }: Props) {
                     `${Platform.OS} ${Platform.Version}`,
                 );
                 setFeedback({ message: result.message, tone: 'success' });
-                await loadStatus();
+                startPunchCooldown();
+                void loadStatus();
             } catch (error) {
                 const message =
                     error instanceof ApiError
@@ -215,35 +300,62 @@ export function TimeScreen({ session }: Props) {
                         : 'Could not record your time. Try again.';
                 setFeedback({ message, tone: 'error' });
             } finally {
+                punchInFlightRef.current = false;
                 setIsWorking(false);
             }
         },
-        [loadStatus, session.accessToken],
+        [loadStatus, session.accessToken, startPunchCooldown],
     );
 
-    const requestPunchScan = useCallback(
-        (action: 'time_in' | 'time_out') => {
-            if (isWorking) {
-                return;
-            }
-
-            console.log('Time punch requested', { action });
-            pendingPunchRef.current = action;
-            setScanRequestId((value) => value + 1);
-        },
-        [isWorking],
-    );
-
-    const handleVerifyFromScanner = useCallback(
+    const handleAutoVerifyComplete = useCallback(
         (embedding: number[]) => {
-            const pending = pendingPunchRef.current;
-            if (!pending) {
+            if (punchInFlightRef.current) {
                 return;
             }
-            pendingPunchRef.current = null;
-            handleVerifyComplete(embedding, pending);
+
+            if (Date.now() < punchCooldownUntilRef.current) {
+                console.log('Auto punch skipped — cooldown active');
+                setIsWorking(false);
+                return;
+            }
+
+            const enrolled = enrolledEmbeddingRef.current;
+
+            if (!enrolled) {
+                console.log('Auto punch blocked — no enrolled embedding on device');
+                setFeedback({
+                    message:
+                        'Face profile is missing on this device. Open Time again or re-enroll your face.',
+                    tone: 'error',
+                });
+                setIsWorking(false);
+                return;
+            }
+
+            const distance = euclideanDistance(enrolled, embedding);
+
+            if (!faceMatches(enrolled, embedding)) {
+                rejectFaceMatch(distance);
+                return;
+            }
+
+            const currentStatus = statusRef.current;
+            const action = currentStatus?.can_punch_out
+                ? 'time_out'
+                : currentStatus?.can_punch_in
+                  ? 'time_in'
+                  : null;
+
+            if (!action) {
+                console.log('Auto punch skipped — no punch action available');
+                setIsWorking(false);
+                return;
+            }
+
+            console.log('Auto punch triggered', { action, distance });
+            void handleVerifyComplete(embedding, action);
         },
-        [handleVerifyComplete],
+        [handleVerifyComplete, rejectFaceMatch],
     );
 
     if (isLoading) {
@@ -259,6 +371,25 @@ export function TimeScreen({ session }: Props) {
     const todayMinutes = status?.today_minutes ?? 0;
     const segments = status?.today_segments ?? [];
     const timeInLabel = formatClock(status?.open_log?.time_in ?? null);
+    const lunchHint =
+        !isTimedIn &&
+        status &&
+        !status.can_punch_in &&
+        status.lunch_notice &&
+        !status.lunch_notice.can_time_in_now
+            ? `Lunch break · back at ${status.lunch_break?.afternoon_start_label ?? '1:00 PM'}`
+            : null;
+    const cooldownHint =
+        cooldownSecondsLeft > 0
+            ? `Next scan in ${formatCooldown(cooldownSecondsLeft)}`
+            : null;
+    const scannerStatusHint =
+        cooldownHint ??
+        (isWorking ? 'Recording time…' : lunchHint);
+    const verifyPaused =
+        isWorking ||
+        cooldownSecondsLeft > 0 ||
+        (!status?.can_punch_in && !status?.can_punch_out);
 
     return (
         <View style={styles.page}>
@@ -273,6 +404,7 @@ export function TimeScreen({ session }: Props) {
                     isTimedIn={isTimedIn}
                     timeInLabel={timeInLabel}
                     showSession={faceEnrolled}
+                    lunchHint={cooldownHint ?? lunchHint}
                 />
 
                 {feedback ? (
@@ -290,8 +422,9 @@ export function TimeScreen({ session }: Props) {
                                     Face setup required
                                 </Text>
                                 <Text style={styles.setupText}>
-                                    Scan your face once to use Time in and Time
-                                    out.
+                                    Scan your face once. After that, time in and
+                                    out happen automatically when your face is
+                                    detected.
                                 </Text>
                                 <Pressable
                                     style={styles.primaryButton}
@@ -337,44 +470,17 @@ export function TimeScreen({ session }: Props) {
                         <EmbeddedFaceScanner
                             isActive
                             mode="verify"
-                            scanRequestId={scanRequestId}
+                            autoVerify
+                            verifyPaused={verifyPaused}
+                            statusHint={scannerStatusHint}
                             isSubmitting={isWorking}
                             onEnrollmentComplete={() => {}}
-                            onVerifyComplete={handleVerifyFromScanner}
+                            onVerifyComplete={handleAutoVerifyComplete}
                             onError={(message) =>
                                 setFeedback({ message, tone: 'error' })
                             }
                             onScanningChange={setIsWorking}
                         />
-
-                        <View style={styles.punchRow}>
-                            <Pressable
-                                disabled={isWorking || !status?.can_punch_in}
-                                style={({ pressed }) => [
-                                    styles.punchButton,
-                                    styles.punchIn,
-                                    (isWorking || !status?.can_punch_in) &&
-                                        styles.buttonDisabled,
-                                    pressed && styles.buttonPressed,
-                                ]}
-                                onPress={() => requestPunchScan('time_in')}
-                            >
-                                <Text style={styles.punchInText}>Time in</Text>
-                            </Pressable>
-                            <Pressable
-                                disabled={isWorking || !status?.can_punch_out}
-                                style={({ pressed }) => [
-                                    styles.punchButton,
-                                    styles.punchOut,
-                                    (isWorking || !status?.can_punch_out) &&
-                                        styles.buttonDisabled,
-                                    pressed && styles.buttonPressed,
-                                ]}
-                                onPress={() => requestPunchScan('time_out')}
-                            >
-                                <Text style={styles.punchOutText}>Time out</Text>
-                            </Pressable>
-                        </View>
 
                         {segments.length > 0 ? (
                             <View style={styles.logCard}>
@@ -489,41 +595,6 @@ const styles = StyleSheet.create({
     },
     mainBlock: {
         gap: 16,
-    },
-    punchRow: {
-        flexDirection: 'row',
-        gap: 10,
-    },
-    punchButton: {
-        flex: 1,
-        minHeight: 52,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    punchIn: {
-        backgroundColor: colors.brand,
-    },
-    punchOut: {
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-    },
-    punchInText: {
-        color: colors.brandForeground,
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    punchOutText: {
-        color: colors.text,
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    buttonPressed: {
-        opacity: 0.88,
-    },
-    buttonDisabled: {
-        opacity: 0.4,
     },
     primaryButton: {
         backgroundColor: colors.brand,

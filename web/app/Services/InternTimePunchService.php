@@ -7,15 +7,23 @@ use App\Models\StudentFaceProfile;
 use App\Models\TimeLog;
 use App\Support\FaceEmbedding;
 use App\Support\FaceMatcher;
+use App\Support\LunchBreak;
+use App\Support\OjtSchedulePersister;
 use Illuminate\Validation\ValidationException;
 
 class InternTimePunchService
 {
+    public function __construct(
+        private readonly LunchAutoTimeoutService $lunchAutoTimeoutService,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
     public function status(Student $student): array
     {
+        $justApplied = $this->lunchAutoTimeoutService->applyIfNeeded($student);
+
         $today = now()->startOfDay();
         $faceProfile = $student->faceProfile()
             ->where('is_active', true)
@@ -40,16 +48,25 @@ class InternTimePunchService
             return 0;
         });
 
+        $blockedByLunchWindow = LunchBreak::isWithinLunchBreakWindow(now());
+
         return [
             'face_enrolled' => $faceProfile !== null,
             'face_enrolled_at' => $faceProfile?->enrolled_at?->toIso8601String(),
+            'face_embedding' => is_array($faceProfile?->face_embedding)
+                ? $faceProfile->face_embedding
+                : null,
             'verification_method' => 'facial_recognition_embedded',
-            'can_punch_in' => $openLog === null && $faceProfile !== null,
+            'can_punch_in' => $openLog === null
+                && $faceProfile !== null
+                && ! $blockedByLunchWindow,
             'can_punch_out' => $openLog !== null && $faceProfile !== null,
             'open_log' => $openLog ? $this->logPayload($openLog) : null,
             'today_segments' => $todayLogs->map(fn (TimeLog $log) => $this->logPayload($log))->values()->all(),
             'today_minutes' => $todayMinutes,
             'today_hours' => round($todayMinutes / 60, 2),
+            'lunch_break' => LunchBreak::toStatusPayload(),
+            'lunch_notice' => $this->lunchAutoTimeoutService->currentNotice($student, $justApplied),
         ];
     }
 
@@ -58,6 +75,8 @@ class InternTimePunchService
      */
     public function history(Student $student, int $limit = 60): array
     {
+        $this->lunchAutoTimeoutService->applyIfNeeded($student);
+
         $logs = $student->timeLogs()
             ->orderByDesc('time_in')
             ->limit($limit)
@@ -106,6 +125,8 @@ class InternTimePunchService
      */
     public function punch(Student $student, string $action, array $embedding, ?string $deviceInfo = null): array
     {
+        $this->lunchAutoTimeoutService->applyIfNeeded($student);
+
         $faceProfile = $student->faceProfile()
             ->where('is_active', true)
             ->first();
@@ -147,13 +168,31 @@ class InternTimePunchService
             ]);
         }
 
+        if (LunchBreak::isWithinLunchBreakWindow(now())) {
+            throw ValidationException::withMessages([
+                'action' => [
+                    sprintf(
+                        'You can time in again at %s after lunch.',
+                        LunchBreak::afternoonStartLabel(),
+                    ),
+                ],
+            ]);
+        }
+
+        $isFirstPunch = ! $student->timeLogs()->exists();
+        $timeIn = now();
+
         $log = TimeLog::query()->create([
             'student_id' => $student->id,
-            'time_in' => now(),
+            'time_in' => $timeIn,
             'verification_method' => 'facial_recognition_embedded',
             'face_match_score' => $distance,
             'device_info' => $deviceInfo,
         ]);
+
+        if ($isFirstPunch) {
+            OjtSchedulePersister::ensureFromFirstTimeIn($student, $timeIn);
+        }
 
         return [
             'message' => 'Timed in successfully.',
@@ -224,6 +263,7 @@ class InternTimePunchService
                 ? (float) $log->face_match_score
                 : null,
             'is_open' => $log->time_out === null,
+            'is_auto_lunch' => $log->verification_method === 'auto_lunch_timeout',
         ];
     }
 }

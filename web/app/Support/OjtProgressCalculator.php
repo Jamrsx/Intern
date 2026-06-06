@@ -87,7 +87,7 @@ class OjtProgressCalculator
             'schedule' => $schedule ? [
                 'hours_per_day' => (float) $schedule->hours_per_day,
                 'days_per_week' => (int) $schedule->days_per_week,
-                'start_date' => $schedule->start_date->toDateString(),
+                'start_date' => $schedule->start_date?->toDateString(),
             ] : null,
         ];
     }

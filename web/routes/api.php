@@ -22,6 +22,7 @@ Route::prefix('auth')->group(function (): void {
 
 Route::middleware('auth:api')->prefix('intern')->group(function (): void {
     Route::get('/progress', [InternProgressController::class, 'show']);
+    Route::put('/schedule', [InternProgressController::class, 'updateSchedule']);
     Route::get('/profile', [InternProfileController::class, 'show']);
     Route::put('/password', [InternPasswordController::class, 'update']);
     Route::get('/documents', [InternDocumentController::class, 'index']);

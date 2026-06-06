@@ -7,17 +7,35 @@ export type TimeLogSegment = {
     verification_method: string;
     face_match_score: number | null;
     is_open: boolean;
+    is_auto_lunch?: boolean;
+};
+
+export type LunchBreakInfo = {
+    lunch_time: string;
+    lunch_time_label: string;
+    afternoon_start_time: string;
+    afternoon_start_label: string;
+    policy_message: string;
+};
+
+export type LunchNotice = {
+    type: 'auto_lunch_timeout' | 'lunch_break_window';
+    message: string;
+    can_time_in_now: boolean;
 };
 
 export type InternTimeStatusResponse = {
     face_enrolled: boolean;
     face_enrolled_at: string | null;
+    face_embedding?: number[] | null;
     can_punch_in: boolean;
     can_punch_out: boolean;
     open_log: TimeLogSegment | null;
     today_segments: TimeLogSegment[];
     today_minutes: number;
     today_hours: number;
+    lunch_break?: LunchBreakInfo;
+    lunch_notice?: LunchNotice | null;
 };
 
 export type InternTimeLogsResponse = {

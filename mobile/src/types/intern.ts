@@ -17,7 +17,7 @@ export type InternProgress = {
     schedule: {
         hours_per_day: number;
         days_per_week: number;
-        start_date: string;
+        start_date: string | null;
     } | null;
 };
 
@@ -28,5 +28,10 @@ export type InternProgressResponse = {
         full_name: string;
     };
     course: InternCourse | null;
+    progress: InternProgress;
+};
+
+export type InternScheduleUpdateResponse = {
+    message: string;
     progress: InternProgress;
 };

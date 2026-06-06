@@ -13,7 +13,7 @@
 | POST | `/api/intern/face/enroll` | `{ "embedding": number[128] }` |
 | POST | `/api/intern/time/punch` | `{ "action": "time_in"\|"time_out", "embedding": number[128], "device_info"?: string }` |
 
-Env: `FACE_MATCH_THRESHOLD=0.6` (lower = stricter).
+Env: `FACE_MATCH_THRESHOLD=0.45` (lower = stricter).
 
 ## Production checklist
 

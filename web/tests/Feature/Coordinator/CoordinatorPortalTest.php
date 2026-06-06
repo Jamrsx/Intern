@@ -46,6 +46,27 @@ it('shows the coordinator dashboard with section stats', function () {
             ->where('stats.unassigned', 1));
 });
 
+it('includes ojt start date on the coordinator students list', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['coordinator' => $coordinator, 'student' => $student] = createCoordinatorWithSection();
+
+    OjtSchedule::query()->create([
+        'student_id' => $student->id,
+        'hours_per_day' => 8,
+        'days_per_week' => 5,
+        'start_date' => '2026-06-10',
+    ]);
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.students.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/students')
+            ->where('students.0.ojt_start_date', '2026-06-10'));
+});
+
 it('allows a coordinator to assign a student to a company', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);

@@ -48,3 +48,40 @@ it('forbids non-intern users from the progress endpoint', function () {
     $this->getJson('/api/intern/progress')
         ->assertForbidden();
 });
+
+it('lets an intern update their ojt schedule', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['student' => $student] = createCoordinatorWithSection();
+
+    Passport::actingAs($student->user);
+
+    $this->putJson('/api/intern/schedule', [
+        'hours_per_day' => 8,
+        'days_per_week' => 6,
+    ])
+        ->assertSuccessful()
+        ->assertJsonPath('progress.schedule.hours_per_day', 8)
+        ->assertJsonPath('progress.schedule.days_per_week', 6)
+        ->assertJsonPath('progress.estimated_end_basis', 'schedule')
+        ->assertJsonPath('progress.estimated_end_is_approximate', false);
+
+    expect(\App\Models\OjtSchedule::query()->where('student_id', $student->id)->exists())->toBeTrue();
+});
+
+it('lets an intern save a monday to thursday schedule', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['student' => $student] = createCoordinatorWithSection();
+
+    Passport::actingAs($student->user);
+
+    $this->putJson('/api/intern/schedule', [
+        'hours_per_day' => 8,
+        'days_per_week' => 4,
+    ])
+        ->assertSuccessful()
+        ->assertJsonPath('progress.schedule.days_per_week', 4);
+});

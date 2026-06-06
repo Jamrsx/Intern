@@ -1,5 +1,8 @@
 import { apiRequest } from './client';
-import type { InternProgressResponse } from '../types/intern';
+import type {
+    InternProgressResponse,
+    InternScheduleUpdateResponse,
+} from '../types/intern';
 import type {
     InternProfileResponse,
     UpdatePasswordPayload,
@@ -16,6 +19,30 @@ export async function fetchInternProgress(
     console.log('Intern progress loaded', {
         remainingHours: response.progress.remaining_hours,
         renderedHours: response.progress.rendered_hours,
+    });
+
+    return response;
+}
+
+export async function updateInternSchedule(
+    token: string,
+    payload: {
+        hours_per_day: number;
+        days_per_week: 4 | 5 | 6;
+    },
+): Promise<InternScheduleUpdateResponse> {
+    const response = await apiRequest<InternScheduleUpdateResponse>(
+        '/api/intern/schedule',
+        {
+            method: 'PUT',
+            token,
+            body: payload,
+        },
+    );
+
+    console.log('Intern schedule updated', {
+        hoursPerDay: response.progress.schedule?.hours_per_day,
+        daysPerWeek: response.progress.schedule?.days_per_week,
     });
 
     return response;

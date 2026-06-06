@@ -15,6 +15,7 @@ import { ApiError } from '../api/client';
 import { DocumentAlertsBell } from '../components/DocumentAlertsBell';
 import { DocumentAlertsModal } from '../components/DocumentAlertsModal';
 import { TimeRecordsModal } from '../components/TimeRecordsModal';
+import { ScheduleEditModal } from '../components/ScheduleEditModal';
 import {
     mapNotificationItems,
     resolveDocsBadgeCount,
@@ -22,7 +23,7 @@ import {
 import { colors } from '../theme/colors';
 import type { StoredSession } from '../types/auth';
 import type { DocumentNotificationItem } from '../types/documents';
-import type { InternProgressResponse } from '../types/intern';
+import type { InternProgress, InternProgressResponse } from '../types/intern';
 import type { TimeLogSegment } from '../types/time';
 
 type Props = {
@@ -45,6 +46,14 @@ function formatDate(dateString: string): string {
         day: 'numeric',
         year: 'numeric',
     });
+}
+
+function getScheduleLabel(progress: InternProgress): string {
+    if (progress.schedule) {
+        return `${progress.schedule.hours_per_day} hrs/day • ${progress.schedule.days_per_week} days/week`;
+    }
+
+    return '8 hrs/day • 5 days/week (default)';
 }
 
 function getTentativeEndCaption(
@@ -80,6 +89,10 @@ export function HomeScreen({
     >([]);
     const [showAlertsModal, setShowAlertsModal] = useState(false);
     const [showTimeRecordsModal, setShowTimeRecordsModal] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [scheduleFeedback, setScheduleFeedback] = useState<string | null>(
+        null,
+    );
     const [timeLogs, setTimeLogs] = useState<TimeLogSegment[]>([]);
     const [timeLogsTotal, setTimeLogsTotal] = useState(0);
     const [isLoadingTimeLogs, setIsLoadingTimeLogs] = useState(false);
@@ -173,6 +186,27 @@ export function HomeScreen({
         console.log('Home time records opened');
         setShowTimeRecordsModal(true);
         loadTimeLogs();
+    };
+
+    const openScheduleModal = () => {
+        console.log('Home schedule edit opened');
+        setShowScheduleModal(true);
+    };
+
+    const handleScheduleSaved = (
+        message: string,
+        updatedProgress: InternProgress,
+    ) => {
+        setScheduleFeedback(message);
+        setData((current) =>
+            current
+                ? {
+                      ...current,
+                      progress: updatedProgress,
+                  }
+                : current,
+        );
+        console.log('Home schedule updated', updatedProgress.schedule);
     };
 
     const displayName =
@@ -304,14 +338,27 @@ export function HomeScreen({
                                 {progress.time_log_count}
                             </Text>
                         </View>
-                        {progress.schedule ? (
-                            <View style={styles.detailRow}>
+                        <View style={styles.scheduleRow}>
+                            <View style={styles.scheduleCopy}>
                                 <Text style={styles.detailLabel}>Schedule</Text>
                                 <Text style={styles.detailValue}>
-                                    {progress.schedule.hours_per_day} hrs/day •{' '}
-                                    {progress.schedule.days_per_week} days/week
+                                    {getScheduleLabel(progress)}
                                 </Text>
                             </View>
+                            <Pressable
+                                onPress={openScheduleModal}
+                                style={({ pressed }) => [
+                                    styles.editButton,
+                                    pressed && styles.editButtonPressed,
+                                ]}
+                            >
+                                <Text style={styles.editButtonText}>Edit</Text>
+                            </Pressable>
+                        </View>
+                        {scheduleFeedback ? (
+                            <Text style={styles.scheduleFeedback}>
+                                {scheduleFeedback}
+                            </Text>
                         ) : null}
                     </View>
                 </>
@@ -341,6 +388,14 @@ export function HomeScreen({
                 errorMessage={timeLogsError}
                 onClose={() => setShowTimeRecordsModal(false)}
                 onRetry={loadTimeLogs}
+            />
+
+            <ScheduleEditModal
+                visible={showScheduleModal}
+                accessToken={session.accessToken}
+                schedule={progress?.schedule ?? null}
+                onClose={() => setShowScheduleModal(false)}
+                onSaved={handleScheduleSaved}
             />
         </>
     );
@@ -563,6 +618,39 @@ const styles = StyleSheet.create({
     },
     detailRow: {
         gap: 4,
+    },
+    scheduleRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    scheduleCopy: {
+        flex: 1,
+        gap: 4,
+    },
+    editButton: {
+        minHeight: 34,
+        paddingHorizontal: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    editButtonPressed: {
+        opacity: 0.88,
+    },
+    editButtonText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: colors.brand,
+    },
+    scheduleFeedback: {
+        fontSize: 13,
+        lineHeight: 18,
+        color: colors.success,
     },
     detailLabel: {
         fontSize: 12,

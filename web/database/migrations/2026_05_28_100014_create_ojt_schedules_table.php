@@ -19,7 +19,7 @@ return new class extends Migration
                 ->cascadeOnDelete();
             $table->decimal('hours_per_day', 4, 2)->default(8);
             $table->unsignedTinyInteger('days_per_week')->default(5);
-            $table->date('start_date');
+            $table->date('start_date')->nullable();
             $table->timestamps();
         });
     }

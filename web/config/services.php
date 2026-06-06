@@ -36,7 +36,7 @@ return [
     ],
 
     'face' => [
-        'match_threshold' => (float) env('FACE_MATCH_THRESHOLD', 0.6),
+        'match_threshold' => (float) env('FACE_MATCH_THRESHOLD', 0.45),
     ],
 
 ];

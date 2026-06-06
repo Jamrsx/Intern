@@ -19,6 +19,11 @@ import {
     FACE_BOX_SMOOTH_BLEND,
     FACE_DESCRIPTOR_SNAPSHOT_QUALITY,
     FACE_ENROLL_DESCRIPTOR_INTERVAL_MS,
+    FACE_AUTO_VERIFY_DESCRIPTOR_INTERVAL_MS,
+    FACE_VERIFY_SNAPSHOT_QUALITY,
+    FACE_VERIFY_MIN_BOX_SCORE,
+    FACE_VERIFY_STABLE_FRAMES,
+    FACE_VERIFY_TRIGGER_DEBOUNCE_MS,
     FACE_TRACK_MIN_INTERVAL_MS,
     FACE_TRACK_SNAPSHOT_QUALITY,
 } from '../constants/face';
@@ -33,6 +38,9 @@ type Props = {
     mode: 'enroll' | 'verify';
     isActive: boolean;
     scanRequestId?: number;
+    autoVerify?: boolean;
+    verifyPaused?: boolean;
+    statusHint?: string | null;
     onEnrollmentComplete: (embedding: number[]) => void;
     onVerifyComplete: (descriptor: number[]) => void;
     onError: (message: string) => void;
@@ -76,6 +84,9 @@ export function EmbeddedFaceScanner({
     mode,
     isActive,
     scanRequestId = 0,
+    autoVerify = false,
+    verifyPaused = false,
+    statusHint = null,
     onEnrollmentComplete,
     onVerifyComplete,
     onError,
@@ -93,8 +104,15 @@ export function EmbeddedFaceScanner({
     const trackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const trackLoopActiveRef = useRef(false);
     const enrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const autoVerifyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const verifyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const capturingRef = useRef(false);
     const faceVisibleRef = useRef(false);
+    const lastTrackDataUrlRef = useRef<string | null>(null);
+    const stableFaceFramesRef = useRef(0);
+    const verifyAttemptInProgressRef = useRef(false);
+    const verifyPausedRef = useRef(verifyPaused);
+    const phaseRef = useRef<FaceScanPhase>('idle');
 
     const [phase, setPhase] = useState<FaceScanPhase>('idle');
     const [modelsReady, setModelsReady] = useState(false);
@@ -127,6 +145,28 @@ export function EmbeddedFaceScanner({
             enrollIntervalRef.current = null;
         }
     }, []);
+
+    const stopAutoVerifyLoop = useCallback(() => {
+        if (autoVerifyIntervalRef.current) {
+            clearInterval(autoVerifyIntervalRef.current);
+            autoVerifyIntervalRef.current = null;
+        }
+    }, []);
+
+    const clearVerifyDebounce = useCallback(() => {
+        if (verifyDebounceRef.current) {
+            clearTimeout(verifyDebounceRef.current);
+            verifyDebounceRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => {
+        verifyPausedRef.current = verifyPaused;
+    }, [verifyPaused]);
+
+    useEffect(() => {
+        phaseRef.current = phase;
+    }, [phase]);
 
     const captureSnapshot = useCallback(
         async (quality: number): Promise<string | null> => {
@@ -166,9 +206,53 @@ export function EmbeddedFaceScanner({
         const dataUrl = await captureSnapshot(FACE_TRACK_SNAPSHOT_QUALITY);
 
         if (dataUrl) {
+            lastTrackDataUrlRef.current = dataUrl;
             processorRef.current?.trackSnapshot(dataUrl);
         }
     }, [captureSnapshot, isActive, modelsReady, phase]);
+
+    const runAutoVerifyCapture = useCallback(async () => {
+        if (
+            !autoVerify ||
+            verifyPausedRef.current ||
+            verifyAttemptInProgressRef.current ||
+            phaseRef.current === 'submitting' ||
+            !faceVisibleRef.current
+        ) {
+            return;
+        }
+
+        verifyAttemptInProgressRef.current = true;
+        stopTrackLoop();
+        setStatusText('Verifying…');
+        console.log('Auto verify capture started');
+
+        const dataUrl = await captureSnapshot(FACE_VERIFY_SNAPSHOT_QUALITY);
+
+        if (!dataUrl) {
+            verifyAttemptInProgressRef.current = false;
+            setStatusText('Looking for your face…');
+            return;
+        }
+
+        processorRef.current?.processSnapshot(dataUrl);
+    }, [autoVerify, captureSnapshot, stopTrackLoop]);
+
+    const scheduleAutoVerifyCapture = useCallback(() => {
+        if (
+            !autoVerify ||
+            verifyPausedRef.current ||
+            verifyAttemptInProgressRef.current ||
+            phaseRef.current === 'submitting'
+        ) {
+            return;
+        }
+
+        clearVerifyDebounce();
+        verifyDebounceRef.current = setTimeout(() => {
+            void runAutoVerifyCapture();
+        }, FACE_VERIFY_TRIGGER_DEBOUNCE_MS);
+    }, [autoVerify, clearVerifyDebounce, runAutoVerifyCapture]);
 
     const startTrackLoop = useCallback(() => {
         stopTrackLoop();
@@ -267,11 +351,40 @@ export function EmbeddedFaceScanner({
 
                 faceVisibleRef.current = true;
                 setFaceBox((previous) => smoothBox(previous, message.box));
+
+                const detectionScore =
+                    typeof message.box.score === 'number'
+                        ? message.box.score
+                        : null;
+
+                if (
+                    mode === 'verify' &&
+                    autoVerify &&
+                    detectionScore !== null &&
+                    detectionScore < FACE_VERIFY_MIN_BOX_SCORE
+                ) {
+                    stableFaceFramesRef.current = 0;
+                    setStatusText('Move closer and face the camera');
+                    return;
+                }
+
                 setStatusText(
                     mode === 'enroll'
                         ? `Scan ${Math.min(enrollIndex + 1, ENROLLMENT_SCAN_COUNT)} of ${ENROLLMENT_SCAN_COUNT}`
-                        : 'Face detected',
+                        : verifyPaused && statusHint
+                          ? statusHint
+                          : autoVerify
+                            ? 'Face detected'
+                            : 'Face detected',
                 );
+
+                if (mode === 'verify' && autoVerify && !verifyPaused) {
+                    stableFaceFramesRef.current += 1;
+
+                    if (stableFaceFramesRef.current >= FACE_VERIFY_STABLE_FRAMES) {
+                        scheduleAutoVerifyCapture();
+                    }
+                }
 
                 return;
             }
@@ -284,14 +397,21 @@ export function EmbeddedFaceScanner({
 
             if (message.type === 'no_face') {
                 faceVisibleRef.current = false;
+                stableFaceFramesRef.current = 0;
+                verifyAttemptInProgressRef.current = false;
+                clearVerifyDebounce();
                 setFaceBox(null);
 
                 if (message.message) {
                     setPhase('idle');
                     onScanningChange?.(false);
-                    setStatusText(message.message);
+                    setStatusText(
+                        autoVerify && mode === 'verify'
+                            ? 'Looking for your face…'
+                            : message.message,
+                    );
 
-                    if (mode === 'verify') {
+                    if (mode === 'verify' && !autoVerify) {
                         onError(message.message);
                     }
                 } else {
@@ -302,12 +422,13 @@ export function EmbeddedFaceScanner({
             }
 
             if (message.type === 'error') {
+                verifyAttemptInProgressRef.current = false;
                 setPhase('idle');
                 onScanningChange?.(false);
                 onError(message.message);
             }
         },
-        [enrollIndex, handleDescriptor, mode, onError, onScanningChange],
+        [enrollIndex, autoVerify, clearVerifyDebounce, handleDescriptor, mode, onError, onScanningChange, scheduleAutoVerifyCapture, statusHint, verifyPaused],
     );
 
     const handleLayout = useCallback((event: LayoutChangeEvent) => {
@@ -321,6 +442,8 @@ export function EmbeddedFaceScanner({
 
     useEffect(() => {
         if (!isSubmitting && phase === 'submitting') {
+            verifyAttemptInProgressRef.current = false;
+            stableFaceFramesRef.current = 0;
             setPhase(modelsReady ? 'idle' : 'loading_models');
             onScanningChange?.(false);
         }
@@ -330,6 +453,11 @@ export function EmbeddedFaceScanner({
         if (!isActive) {
             stopTrackLoop();
             stopEnrollLoop();
+            stopAutoVerifyLoop();
+            clearVerifyDebounce();
+            verifyAttemptInProgressRef.current = false;
+            stableFaceFramesRef.current = 0;
+            lastTrackDataUrlRef.current = null;
             setPhase('idle');
             setFaceBox(null);
             setCameraInitialized(false);
@@ -348,6 +476,8 @@ export function EmbeddedFaceScanner({
         onScanningChange,
         requestPermission,
         stopEnrollLoop,
+        stopAutoVerifyLoop,
+        clearVerifyDebounce,
         stopTrackLoop,
     ]);
 
@@ -357,7 +487,7 @@ export function EmbeddedFaceScanner({
             !modelsReady ||
             !captureReady ||
             phase === 'submitting' ||
-            (mode === 'verify' && phase === 'scanning')
+            (mode === 'verify' && phase === 'scanning' && !autoVerify)
         ) {
             stopTrackLoop();
 
@@ -368,6 +498,7 @@ export function EmbeddedFaceScanner({
 
         return stopTrackLoop;
     }, [
+        autoVerify,
         captureReady,
         isActive,
         mode,
@@ -409,7 +540,50 @@ export function EmbeddedFaceScanner({
 
     useEffect(() => {
         if (
+            !isActive ||
+            !modelsReady ||
             mode !== 'verify' ||
+            !autoVerify ||
+            verifyPaused ||
+            phase === 'submitting'
+        ) {
+            stopAutoVerifyLoop();
+
+            if (verifyPaused && statusHint && mode === 'verify' && autoVerify) {
+                setStatusText(statusHint);
+            }
+
+            return;
+        }
+
+        setPhase('scanning');
+        setStatusText('Looking for your face…');
+        autoVerifyIntervalRef.current = setInterval(() => {
+            if (
+                faceVisibleRef.current &&
+                stableFaceFramesRef.current >= FACE_VERIFY_STABLE_FRAMES
+            ) {
+                runAutoVerifyCapture();
+            }
+        }, FACE_AUTO_VERIFY_DESCRIPTOR_INTERVAL_MS);
+
+        return stopAutoVerifyLoop;
+    }, [
+        autoVerify,
+        isActive,
+        mode,
+        modelsReady,
+        phase,
+        runAutoVerifyCapture,
+        statusHint,
+        stopAutoVerifyLoop,
+        verifyPaused,
+    ]);
+
+    useEffect(() => {
+        if (
+            mode !== 'verify' ||
+            autoVerify ||
             !isActive ||
             !modelsReady ||
             !captureReady ||
@@ -431,6 +605,12 @@ export function EmbeddedFaceScanner({
         runDescriptorFrame,
         scanRequestId,
     ]);
+
+    useEffect(() => {
+        if (verifyPaused && statusHint && mode === 'verify' && autoVerify && phase !== 'submitting') {
+            setStatusText(statusHint);
+        }
+    }, [autoVerify, mode, phase, statusHint, verifyPaused]);
 
     if (!hasPermission) {
         return (
@@ -487,7 +667,11 @@ export function EmbeddedFaceScanner({
                             modelsReady
                                 ? mode === 'enroll'
                                     ? 'Position your face in the box'
-                                    : 'Face the camera'
+                                    : autoVerify
+                                      ? verifyPaused && statusHint
+                                          ? statusHint
+                                          : 'Face the camera to time in or out'
+                                      : 'Face the camera'
                                 : 'Loading face models…',
                         );
                     }}
@@ -528,7 +712,11 @@ export function EmbeddedFaceScanner({
                 {!modelsReady ? (
                     <ActivityIndicator color="#fff" size="small" />
                 ) : null}
-                <Text style={styles.statusText}>{statusText}</Text>
+                <Text style={styles.statusText}>
+                    {statusHint && verifyPaused && mode === 'verify' && autoVerify
+                        ? statusHint
+                        : statusText}
+                </Text>
             </View>
 
             <FaceProcessorWebView

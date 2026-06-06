@@ -87,6 +87,7 @@ type StudentRow = {
         is_new: boolean;
     } | null;
     has_new_completed_evaluation: boolean;
+    ojt_start_date: string | null;
 };
 
 type CompanyGroup = {
@@ -149,6 +150,18 @@ function persistCompanyGroupState(state: Record<string, boolean>): void {
 
 function groupKey(companyId: number | null): string {
     return companyId === null ? 'unassigned' : String(companyId);
+}
+
+function formatOjtStartDate(value: string | null): string {
+    if (!value) {
+        return '—';
+    }
+
+    return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
 }
 
 export default function CoordinatorStudents() {
@@ -709,6 +722,9 @@ export default function CoordinatorStudents() {
                                                                         Supervisor
                                                                     </th>
                                                                     <th className="px-4 py-3 font-medium">
+                                                                        OJT start
+                                                                    </th>
+                                                                    <th className="px-4 py-3 font-medium">
                                                                         Documents
                                                                     </th>
                                                                     <th className="px-4 py-3 font-medium">
@@ -771,6 +787,19 @@ export default function CoordinatorStudents() {
                                                                                 ) : (
                                                                                     <span className="text-muted-foreground">
                                                                                         —
+                                                                                    </span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td className="px-4 py-3">
+                                                                                {student.ojt_start_date ? (
+                                                                                    <span>
+                                                                                        {formatOjtStartDate(
+                                                                                            student.ojt_start_date,
+                                                                                        )}
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-muted-foreground">
+                                                                                        Not started
                                                                                     </span>
                                                                                 )}
                                                                             </td>

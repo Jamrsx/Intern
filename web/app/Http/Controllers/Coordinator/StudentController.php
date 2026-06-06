@@ -257,6 +257,7 @@ class StudentController extends Controller
                 'is_new' => $completedIsNew,
             ] : null,
             'has_new_completed_evaluation' => $completedIsNew,
+            'ojt_start_date' => $student->ojtSchedule?->start_date?->toDateString(),
         ];
     }
 
@@ -275,6 +276,7 @@ class StudentController extends Controller
                 'company:id,name',
                 'department:id,name,company_id',
                 'supervisor.user:id,name',
+                'ojtSchedule:id,student_id,start_date',
             ])
             ->withCount('documents')
             ->withMax('documents as latest_document_uploaded_at', 'uploaded_at')
