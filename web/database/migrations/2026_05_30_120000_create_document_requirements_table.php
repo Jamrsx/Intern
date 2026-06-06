@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('title');
             $table->text('description')->nullable();
             $table->dateTime('deadline_at');
+            $table->string('accepted_file_types')->default('pdf_and_word');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 

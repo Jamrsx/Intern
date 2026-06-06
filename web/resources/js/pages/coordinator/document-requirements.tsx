@@ -17,6 +17,8 @@ type RequirementRow = {
     title: string;
     description: string | null;
     deadline_at: string;
+    accepted_file_types: 'pdf_only' | 'pdf_and_word';
+    accepted_file_types_label: string;
     is_active: boolean;
     submitted_count: number;
     pending_count: number;
@@ -204,6 +206,9 @@ export default function CoordinatorDocumentRequirements({
                                             </span>
                                         </div>
                                         <div className="flex flex-wrap gap-2 pt-1">
+                                            <Badge variant="outline">
+                                                {requirement.accepted_file_types_label}
+                                            </Badge>
                                             <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
                                                 {requirement.submitted_count}{' '}
                                                 submitted
@@ -308,6 +313,35 @@ export default function CoordinatorDocumentRequirements({
                                     className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 />
                                 <InputError message={errors.description} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="accepted_file_types">
+                                    Accepted file types
+                                </Label>
+                                <select
+                                    id="accepted_file_types"
+                                    name="accepted_file_types"
+                                    defaultValue={
+                                        editing?.accepted_file_types ??
+                                        'pdf_and_word'
+                                    }
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                >
+                                    <option value="pdf_and_word">
+                                        PDF and Word (.pdf, .doc, .docx)
+                                    </option>
+                                    <option value="pdf_only">
+                                        PDF only (.pdf)
+                                    </option>
+                                </select>
+                                <p className="text-xs text-muted-foreground">
+                                    Interns see this rule when uploading from
+                                    the mobile Docs screen.
+                                </p>
+                                <InputError
+                                    message={errors.accepted_file_types}
+                                />
                             </div>
 
                             <div className="space-y-2">

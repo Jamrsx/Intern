@@ -57,6 +57,7 @@ class DocumentRequirementController extends Controller
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'deadline_at' => $validated['deadline_at'],
+            'accepted_file_types' => $validated['accepted_file_types'],
             'is_active' => $validated['is_active'] ?? true,
         ]);
 
@@ -81,6 +82,7 @@ class DocumentRequirementController extends Controller
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'deadline_at' => $validated['deadline_at'],
+            'accepted_file_types' => $validated['accepted_file_types'],
             'is_active' => $request->boolean('is_active', $documentRequirement->is_active),
         ]);
 
@@ -150,6 +152,8 @@ class DocumentRequirementController extends Controller
             'title' => $requirement->title,
             'description' => $requirement->description,
             'deadline_at' => $requirement->deadline_at->toIso8601String(),
+            'accepted_file_types' => $requirement->accepted_file_types->value,
+            'accepted_file_types_label' => $requirement->accepted_file_types->label(),
             'is_active' => $requirement->is_active,
             'submitted_count' => $submittedCount,
             'pending_count' => max(0, $studentCount - $submittedCount),

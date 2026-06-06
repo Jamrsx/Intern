@@ -8,6 +8,7 @@ use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
 use App\Models\Student;
 use App\Models\StudentDocument;
+use App\Support\DocumentRequirementFileType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -79,6 +80,8 @@ class InternDocumentController extends Controller
                     ],
                 ]);
             }
+
+            $this->ensureFileMatchesRequirement($uploadedFile, $requirement);
         }
 
         $documentType = DocumentType::query()->firstOrCreate(
@@ -117,6 +120,24 @@ class InternDocumentController extends Controller
         return Student::query()
             ->where('user_id', $userId)
             ->firstOrFail();
+    }
+
+    private function ensureFileMatchesRequirement(
+        UploadedFile $uploadedFile,
+        DocumentRequirement $requirement,
+    ): void {
+        $extension = strtolower($uploadedFile->getClientOriginalExtension());
+        $allowedExtensions = $requirement->accepted_file_types->allowedExtensions();
+
+        if (! in_array($extension, $allowedExtensions, true)) {
+            throw ValidationException::withMessages([
+                'file' => [
+                    $requirement->accepted_file_types === DocumentRequirementFileType::PdfOnly
+                        ? 'Only PDF files are allowed for this requirement.'
+                        : 'Only PDF and Word (.doc, .docx) files are allowed for this requirement.',
+                ],
+            ]);
+        }
     }
 
     /**

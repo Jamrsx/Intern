@@ -292,6 +292,11 @@ function PendingRequirementRow({
                         {requirement.description}
                     </Text>
                 ) : null}
+                <Text style={styles.pendingFileTypes} numberOfLines={1}>
+                    {requirement.accepted_file_types === 'pdf_only'
+                        ? 'PDF only'
+                        : 'PDF or Word'}
+                </Text>
             </View>
             <View style={styles.pendingRowActions}>
                 <View
@@ -972,6 +977,12 @@ const styles = StyleSheet.create({
     pendingDescription: {
         fontSize: 12,
         color: colors.textMuted,
+        ...textDefaults,
+    },
+    pendingFileTypes: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: colors.textSubtle,
         ...textDefaults,
     },
     pendingRowActions: {

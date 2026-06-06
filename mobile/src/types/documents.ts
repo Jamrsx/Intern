@@ -3,11 +3,16 @@ export type DocumentRequirementStatus =
     | 'submitted'
     | 'overdue';
 
+export type DocumentRequirementFileType = 'pdf_only' | 'pdf_and_word';
+
 export type InternDocumentRequirement = {
     id: number;
     title: string;
     description: string | null;
     deadline_at: string;
+    accepted_file_types: DocumentRequirementFileType;
+    accepted_file_types_label?: string;
+    accepted_file_types_hint?: string;
     published_at?: string;
     status: DocumentRequirementStatus;
     is_submitted: boolean;

@@ -14,7 +14,6 @@ import {
     isErrorWithCode,
     errorCodes,
     pick,
-    types,
 } from '@react-native-documents/picker';
 import { ApiError } from '../api/client';
 import { uploadInternDocument } from '../api/documents';
@@ -23,6 +22,13 @@ import type {
     InternDocumentRequirement,
     PickedUploadFile,
 } from '../types/documents';
+import {
+    getRequirementPickerLabel,
+    getRequirementPickerTypes,
+    getRequirementUploadHint,
+    isFileAllowedForRequirement,
+    requirementFileTypeError,
+} from '../utils/documentFileTypes';
 
 const SUGGESTIONS = ['MOA', 'Week 1', 'Week 2', 'Week 3', 'Week 4'];
 
@@ -74,7 +80,7 @@ export function UploadDocumentModal({
 
         try {
             const [file] = await pick({
-                type: [types.pdf, types.doc, types.docx],
+                type: getRequirementPickerTypes(requirement?.accepted_file_types),
                 allowMultiSelection: false,
             });
 
@@ -93,7 +99,11 @@ export function UploadDocumentModal({
                       : 'application/pdf');
 
             setPickedFile({ uri: file.uri, name, type });
-            console.log('Document file picked', { name, type });
+            console.log('Document file picked', {
+                name,
+                type,
+                accepted_file_types: requirement?.accepted_file_types,
+            });
         } catch (error) {
             if (
                 isErrorWithCode(error) &&
@@ -116,7 +126,19 @@ export function UploadDocumentModal({
         }
 
         if (!pickedFile) {
-            setErrorMessage('Choose a PDF or Word file to upload.');
+            setErrorMessage(requirementFileTypeError(requirement?.accepted_file_types));
+            return;
+        }
+
+        if (
+            isRequirementUpload &&
+            !isFileAllowedForRequirement(
+                pickedFile.name,
+                pickedFile.type,
+                requirement?.accepted_file_types,
+            )
+        ) {
+            setErrorMessage(requirementFileTypeError(requirement?.accepted_file_types));
             return;
         }
 
@@ -179,9 +201,10 @@ export function UploadDocumentModal({
                             : 'Upload document'}
                     </Text>
                     <Text style={styles.subtitle}>
-                        {isRequirementUpload
-                            ? 'Choose a PDF or Word file for this requirement.'
-                            : 'Name your report, then choose a PDF or Word file.'}
+                        {getRequirementUploadHint(
+                            requirement?.accepted_file_types,
+                            isRequirementUpload,
+                        )}
                     </Text>
 
                     {isRequirementUpload && requirement ? (
@@ -194,6 +217,12 @@ export function UploadDocumentModal({
                                     {requirement.description}
                                 </Text>
                             ) : null}
+                            <Text style={styles.requirementFileTypes}>
+                                {requirement.accepted_file_types_hint ??
+                                    (requirement.accepted_file_types === 'pdf_only'
+                                        ? 'PDF only'
+                                        : 'PDF or Word')}
+                            </Text>
                         </View>
                     ) : (
                         <>
@@ -237,9 +266,10 @@ export function UploadDocumentModal({
                         ]}
                     >
                         <Text style={styles.fileButtonText}>
-                            {pickedFile
-                                ? pickedFile.name
-                                : 'Choose PDF or Word file'}
+                            {getRequirementPickerLabel(
+                                requirement?.accepted_file_types,
+                                pickedFile?.name,
+                            )}
                         </Text>
                     </Pressable>
 
@@ -343,6 +373,12 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 18,
         color: colors.textMuted,
+    },
+    requirementFileTypes: {
+        marginTop: 4,
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.brand,
     },
     fieldLabel: {
         marginTop: 16,

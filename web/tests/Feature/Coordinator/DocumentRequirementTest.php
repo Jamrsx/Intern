@@ -24,12 +24,14 @@ it('allows coordinators to create document requirements for their section', func
             'title' => 'MOA',
             'description' => 'Submit signed memorandum of agreement.',
             'deadline_at' => $deadline,
+            'accepted_file_types' => 'pdf_only',
         ])
         ->assertRedirect(route('coordinators.document-requirements.index'));
 
     $this->assertDatabaseHas('document_requirements', [
         'section_id' => $section->id,
         'title' => 'MOA',
+        'accepted_file_types' => 'pdf_only',
         'created_by_user_id' => $coordinator->id,
     ]);
 });
@@ -112,4 +114,39 @@ it('prevents duplicate submission for the same requirement', function () {
     ])
         ->assertUnprocessable()
         ->assertJsonValidationErrors(['document_requirement_id']);
+});
+
+it('rejects word uploads when requirement accepts pdf only', function () {
+    Storage::fake('local');
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['coordinator' => $coordinator, 'student' => $student, 'section' => $section] = createCoordinatorWithSection();
+
+    $requirement = DocumentRequirement::query()->create([
+        'section_id' => $section->id,
+        'created_by_user_id' => $coordinator->id,
+        'title' => 'Signed MOA',
+        'deadline_at' => now()->addWeek(),
+        'accepted_file_types' => 'pdf_only',
+        'is_active' => true,
+    ]);
+
+    Passport::actingAs($student->user);
+
+    $docx = UploadedFile::fake()->create('moa.docx', 100, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+
+    $this->postJson('/api/intern/documents', [
+        'document_requirement_id' => $requirement->id,
+        'file' => $docx,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['file']);
+
+    $pdf = UploadedFile::fake()->create('moa.pdf', 100, 'application/pdf');
+
+    $this->postJson('/api/intern/documents', [
+        'document_requirement_id' => $requirement->id,
+        'file' => $pdf,
+    ])->assertCreated();
 });

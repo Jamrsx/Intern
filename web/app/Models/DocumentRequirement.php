@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\DocumentRequirementFileType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,6 +18,7 @@ class DocumentRequirement extends Model
         'title',
         'description',
         'deadline_at',
+        'accepted_file_types',
         'is_active',
     ];
 
@@ -27,6 +29,7 @@ class DocumentRequirement extends Model
     {
         return [
             'deadline_at' => 'datetime',
+            'accepted_file_types' => DocumentRequirementFileType::class,
             'is_active' => 'boolean',
         ];
     }
