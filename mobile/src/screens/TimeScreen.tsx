@@ -18,16 +18,37 @@ import { EmbeddedFaceScanner } from '../components/EmbeddedFaceScanner';
 import { PUNCH_COOLDOWN_MS } from '../constants/face';
 import { euclideanDistance, faceMatches } from '../face/faceMatcher';
 import {
+    getCurrentDeviceLocation,
+    isPermissionLocationFailure,
+    requestLocationPermission,
+    VICINITY_FAST_CACHE_MS,
+    VICINITY_STALE_CACHE_MS,
+} from '../services/deviceLocation';
+import { readLocationCache } from '../storage/locationCacheStorage';
+import {
     getEnrolledFaceEmbedding,
     saveEnrolledFaceEmbedding,
 } from '../storage/faceEmbeddingStorage';
 import { colors } from '../theme/colors';
+import {
+    distanceMeters,
+    formatDistanceMeters,
+    isWithinGeofence,
+} from '../utils/geofence';
 import type { StoredSession } from '../types/auth';
 import type { InternTimeStatusResponse, TimeLogSegment } from '../types/time';
 
 type Props = {
     session: StoredSession;
 };
+
+type VicinityStatus =
+    | 'idle'
+    | 'checking'
+    | 'locating'
+    | 'inside'
+    | 'outside'
+    | 'gps_denied';
 
 function formatClock(value: string | null): string {
     if (!value) {
@@ -95,13 +116,13 @@ function StatusHeader({
     isTimedIn,
     timeInLabel,
     showSession,
-    lunchHint,
+    sessionHint,
 }: {
     todayMinutes: number;
     isTimedIn: boolean;
     timeInLabel: string;
     showSession: boolean;
-    lunchHint: string | null;
+    sessionHint: string | null;
 }) {
     return (
         <View style={styles.statusHeader}>
@@ -113,13 +134,127 @@ function StatusHeader({
                 <View style={styles.sessionRow}>
                     {isTimedIn ? <View style={styles.sessionDot} /> : null}
                     <Text style={styles.sessionText}>
-                        {lunchHint ??
+                        {sessionHint ??
                             (isTimedIn
                                 ? `Timed in since ${timeInLabel}`
                                 : 'Not timed in')}
                     </Text>
                 </View>
             ) : null}
+        </View>
+    );
+}
+
+function VicinityStatusLine({
+    status,
+    companyName,
+    radiusMeters,
+    canPunchIn,
+    canPunchOut,
+}: {
+    status: VicinityStatus;
+    companyName: string;
+    radiusMeters: number;
+    canPunchIn: boolean;
+    canPunchOut: boolean;
+}) {
+    if (status === 'checking' || status === 'idle' || status === 'locating') {
+        return (
+            <Text style={styles.vicinityChecking}>
+                {status === 'locating'
+                    ? 'Getting GPS fix…'
+                    : `Checking location for ${companyName}…`}
+            </Text>
+        );
+    }
+
+    if (status === 'gps_denied') {
+        return (
+            <Text style={styles.vicinityError}>
+                GPS not allowed or activated
+            </Text>
+        );
+    }
+
+    if (status === 'outside') {
+        return (
+            <Text style={styles.vicinityError}>Not in vicinity.</Text>
+        );
+    }
+
+    const readyLabel = canPunchOut
+        ? 'ready to time out'
+        : canPunchIn
+          ? 'ready to time in'
+          : 'in vicinity';
+
+    return (
+        <Text style={styles.vicinitySuccess}>
+            In vicinity at {companyName} ({formatDistanceMeters(radiusMeters)}{' '}
+            area) · {readyLabel}
+        </Text>
+    );
+}
+
+const SCANNER_PLACEHOLDER_HEIGHT = 300;
+
+function GeofenceScannerBlocked({
+    status,
+    companyName,
+}: {
+    status: VicinityStatus;
+    companyName: string;
+}) {
+    const isChecking =
+        status === 'checking' || status === 'idle' || status === 'locating';
+
+    let title = 'Time in/out unavailable';
+    let message = `Move inside the allowed area at ${companyName} to use face scan.`;
+
+    if (status === 'gps_denied') {
+        title = 'Location required';
+        message =
+            'GPS not allowed or activated. Enable location in your phone settings, then return here.';
+    } else if (status === 'outside') {
+        title = 'Not in vicinity';
+        message = `You must be at ${companyName} to time in or out. Face scan is disabled until you are on site.`;
+    } else if (isChecking) {
+        title = 'Checking location';
+        message = `Confirming you are at ${companyName} before opening the camera…`;
+    }
+
+    console.log('Face scanner hidden — geofence not satisfied', { status });
+
+    return (
+        <View
+            style={[
+                styles.scannerBlocked,
+                !isChecking && styles.scannerBlockedMuted,
+            ]}
+        >
+            {isChecking ? (
+                <ActivityIndicator size="large" color={colors.brand} />
+            ) : (
+                <View
+                    style={[
+                        styles.scannerBlockedBadge,
+                        (status === 'outside' || status === 'gps_denied') &&
+                            styles.scannerBlockedBadgeError,
+                    ]}
+                >
+                    <Text
+                        style={[
+                            styles.scannerBlockedBadgeLabel,
+                            (status === 'outside' || status === 'gps_denied') &&
+                                styles.scannerBlockedBadgeLabelError,
+                        ]}
+                    >
+                        !
+                    </Text>
+                </View>
+            )}
+            <Text style={styles.scannerBlockedTitle}>{title}</Text>
+            <Text style={styles.scannerBlockedMessage}>{message}</Text>
         </View>
     );
 }
@@ -161,7 +296,10 @@ export function TimeScreen({ session }: Props) {
     } | null>(null);
     const [enrollStep, setEnrollStep] = useState<'intro' | 'scanning'>('intro');
     const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
+    const [vicinityStatus, setVicinityStatus] =
+        useState<VicinityStatus>('idle');
     const punchCooldownUntilRef = useRef(0);
+    const vicinityCheckInFlightRef = useRef(false);
     const punchInFlightRef = useRef(false);
     const statusRef = useRef<InternTimeStatusResponse | null>(null);
     const enrolledEmbeddingRef = useRef<number[] | null>(null);
@@ -213,6 +351,136 @@ export function TimeScreen({ session }: Props) {
     useEffect(() => {
         loadStatus();
     }, [loadStatus]);
+
+    const applyVicinityFromLocation = useCallback(
+        (
+            geofence: NonNullable<InternTimeStatusResponse['geofence']>,
+            location: {
+                latitude: number;
+                longitude: number;
+                accuracyMeters: number | null;
+            },
+            source: 'cache' | 'gps',
+        ) => {
+            if (
+                geofence.latitude === null ||
+                geofence.longitude === null ||
+                geofence.radius_meters === null
+            ) {
+                setVicinityStatus('outside');
+                return;
+            }
+
+            const inside = isWithinGeofence(
+                location.latitude,
+                location.longitude,
+                geofence.latitude,
+                geofence.longitude,
+                geofence.radius_meters,
+                location.accuracyMeters,
+            );
+
+            console.log('Vicinity check result', {
+                inside,
+                company: geofence.company_name,
+                source,
+            });
+
+            setVicinityStatus(inside ? 'inside' : 'outside');
+        },
+        [],
+    );
+
+    const refreshVicinityStatus = useCallback(async () => {
+        const geofence = statusRef.current?.geofence;
+
+        if (!geofence?.required) {
+            setVicinityStatus('idle');
+            return;
+        }
+
+        if (vicinityCheckInFlightRef.current) {
+            return;
+        }
+
+        vicinityCheckInFlightRef.current = true;
+        setVicinityStatus((current) =>
+            current === 'idle' ? 'checking' : current,
+        );
+
+        try {
+            const permitted = await requestLocationPermission();
+
+            if (!permitted) {
+                console.log('Vicinity check — location permission missing');
+                setVicinityStatus('gps_denied');
+                return;
+            }
+
+            const cached = await readLocationCache(VICINITY_FAST_CACHE_MS);
+
+            if (cached) {
+                applyVicinityFromLocation(geofence, cached, 'cache');
+                console.log('Vicinity applied from cached location', {
+                    ageMs: Date.now() - cached.savedAt,
+                });
+            } else {
+                setVicinityStatus((current) =>
+                    current === 'checking' || current === 'idle'
+                        ? 'locating'
+                        : current,
+                );
+            }
+
+            const location = await getCurrentDeviceLocation({
+                allowStaleCacheOnFailure: true,
+            });
+
+            applyVicinityFromLocation(geofence, location, 'gps');
+        } catch (error) {
+            console.log('Vicinity check failed', error);
+
+            if (isPermissionLocationFailure(error)) {
+                setVicinityStatus('gps_denied');
+                return;
+            }
+
+            const stale = await readLocationCache(VICINITY_STALE_CACHE_MS);
+
+            if (stale) {
+                applyVicinityFromLocation(geofence, stale, 'cache');
+                return;
+            }
+
+            setVicinityStatus('locating');
+        } finally {
+            vicinityCheckInFlightRef.current = false;
+        }
+    }, [applyVicinityFromLocation]);
+
+    useEffect(() => {
+        if (!status?.geofence?.required || !status.face_enrolled) {
+            setVicinityStatus('idle');
+            return;
+        }
+
+        const startVicinityChecks = async () => {
+            await requestLocationPermission();
+            await refreshVicinityStatus();
+        };
+
+        void startVicinityChecks();
+
+        const intervalId = setInterval(() => {
+            void refreshVicinityStatus();
+        }, 15000);
+
+        return () => clearInterval(intervalId);
+    }, [
+        refreshVicinityStatus,
+        status?.face_enrolled,
+        status?.geofence?.required,
+    ]);
 
     useEffect(() => {
         const intervalId = setInterval(() => {
@@ -273,6 +541,65 @@ export function TimeScreen({ session }: Props) {
         setIsWorking(false);
     }, []);
 
+    const resolveLocationForPunch = useCallback(async () => {
+        const geofence = statusRef.current?.geofence;
+
+        if (!geofence?.required) {
+            return null;
+        }
+
+        const permitted = await requestLocationPermission();
+
+        if (!permitted) {
+            throw new Error(
+                'Location permission is required to time in or out at your company site.',
+            );
+        }
+
+        const location = await getCurrentDeviceLocation({
+            allowStaleCacheOnFailure: false,
+        });
+
+        if (
+            geofence.latitude === null ||
+            geofence.longitude === null ||
+            geofence.radius_meters === null
+        ) {
+            throw new Error(
+                'Your company work site is not configured yet. Contact your coordinator.',
+            );
+        }
+
+        const inside = isWithinGeofence(
+            location.latitude,
+            location.longitude,
+            geofence.latitude,
+            geofence.longitude,
+            geofence.radius_meters,
+            location.accuracyMeters,
+        );
+
+        if (!inside) {
+            const distance = distanceMeters(
+                location.latitude,
+                location.longitude,
+                geofence.latitude,
+                geofence.longitude,
+            );
+
+            console.log('Geofence check failed on device', {
+                distance: Math.round(distance),
+                radius: geofence.radius_meters,
+            });
+
+            throw new Error(
+                `You are outside the allowed work area at ${geofence.company_name ?? 'your company'}. Move inside the geofence and try again.`,
+            );
+        }
+
+        return location;
+    }, []);
+
     const handleVerifyComplete = useCallback(
         async (embedding: number[], action: 'time_in' | 'time_out') => {
             if (punchInFlightRef.current) {
@@ -284,11 +611,14 @@ export function TimeScreen({ session }: Props) {
             setFeedback(null);
 
             try {
+                const location = await resolveLocationForPunch();
+
                 const result = await punchInternTime(
                     session.accessToken,
                     action,
                     embedding,
                     `${Platform.OS} ${Platform.Version}`,
+                    location,
                 );
                 setFeedback({ message: result.message, tone: 'success' });
                 startPunchCooldown();
@@ -297,14 +627,16 @@ export function TimeScreen({ session }: Props) {
                 const message =
                     error instanceof ApiError
                         ? error.message
-                        : 'Could not record your time. Try again.';
+                        : error instanceof Error
+                          ? error.message
+                          : 'Could not record your time. Try again.';
                 setFeedback({ message, tone: 'error' });
             } finally {
                 punchInFlightRef.current = false;
                 setIsWorking(false);
             }
         },
-        [loadStatus, session.accessToken, startPunchCooldown],
+        [loadStatus, resolveLocationForPunch, session.accessToken, startPunchCooldown],
     );
 
     const handleAutoVerifyComplete = useCallback(
@@ -383,6 +715,9 @@ export function TimeScreen({ session }: Props) {
         cooldownSecondsLeft > 0
             ? `Next scan in ${formatCooldown(cooldownSecondsLeft)}`
             : null;
+    const geofenceRequired = Boolean(status?.geofence?.required);
+    const canShowFaceScanner =
+        !geofenceRequired || vicinityStatus === 'inside';
     const scannerStatusHint =
         cooldownHint ??
         (isWorking ? 'Recording time…' : lunchHint);
@@ -404,8 +739,20 @@ export function TimeScreen({ session }: Props) {
                     isTimedIn={isTimedIn}
                     timeInLabel={timeInLabel}
                     showSession={faceEnrolled}
-                    lunchHint={cooldownHint ?? lunchHint}
+                    sessionHint={cooldownHint ?? lunchHint}
                 />
+
+                {faceEnrolled &&
+                geofenceRequired &&
+                status?.geofence?.company_name ? (
+                    <VicinityStatusLine
+                        status={vicinityStatus}
+                        companyName={status.geofence.company_name}
+                        radiusMeters={status.geofence.radius_meters ?? 0}
+                        canPunchIn={status.can_punch_in}
+                        canPunchOut={status.can_punch_out}
+                    />
+                ) : null}
 
                 {feedback ? (
                     <FeedbackBanner
@@ -467,20 +814,30 @@ export function TimeScreen({ session }: Props) {
                     </View>
                 ) : (
                     <View style={styles.mainBlock}>
-                        <EmbeddedFaceScanner
-                            isActive
-                            mode="verify"
-                            autoVerify
-                            verifyPaused={verifyPaused}
-                            statusHint={scannerStatusHint}
-                            isSubmitting={isWorking}
-                            onEnrollmentComplete={() => {}}
-                            onVerifyComplete={handleAutoVerifyComplete}
-                            onError={(message) =>
-                                setFeedback({ message, tone: 'error' })
-                            }
-                            onScanningChange={setIsWorking}
-                        />
+                        {canShowFaceScanner ? (
+                            <EmbeddedFaceScanner
+                                isActive
+                                mode="verify"
+                                autoVerify
+                                verifyPaused={verifyPaused}
+                                statusHint={scannerStatusHint}
+                                isSubmitting={isWorking}
+                                onEnrollmentComplete={() => {}}
+                                onVerifyComplete={handleAutoVerifyComplete}
+                                onError={(message) =>
+                                    setFeedback({ message, tone: 'error' })
+                                }
+                                onScanningChange={setIsWorking}
+                            />
+                        ) : (
+                            <GeofenceScannerBlocked
+                                status={vicinityStatus}
+                                companyName={
+                                    status?.geofence?.company_name ??
+                                    'your company'
+                                }
+                            />
+                        )}
 
                         {segments.length > 0 ? (
                             <View style={styles.logCard}>
@@ -555,6 +912,27 @@ const styles = StyleSheet.create({
         color: colors.textMuted,
         textAlign: 'center',
     },
+    vicinityChecking: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.textMuted,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    vicinityError: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.error,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    vicinitySuccess: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: colors.success,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
     feedback: {
         borderRadius: 12,
         paddingHorizontal: 14,
@@ -595,6 +973,57 @@ const styles = StyleSheet.create({
     },
     mainBlock: {
         gap: 16,
+    },
+    scannerBlocked: {
+        minHeight: SCANNER_PLACEHOLDER_HEIGHT,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        paddingHorizontal: 24,
+        paddingVertical: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+    },
+    scannerBlockedMuted: {
+        backgroundColor: colors.errorBackground,
+        borderColor: '#FECACA',
+    },
+    scannerBlockedBadge: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        borderWidth: 2,
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    scannerBlockedBadgeError: {
+        borderColor: colors.error,
+        backgroundColor: colors.errorBackground,
+    },
+    scannerBlockedBadgeLabel: {
+        fontSize: 22,
+        fontWeight: '700',
+        color: colors.textMuted,
+    },
+    scannerBlockedBadgeLabelError: {
+        color: colors.error,
+    },
+    scannerBlockedTitle: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: colors.text,
+        textAlign: 'center',
+    },
+    scannerBlockedMessage: {
+        fontSize: 14,
+        lineHeight: 21,
+        color: colors.textMuted,
+        textAlign: 'center',
+        maxWidth: 300,
     },
     primaryButton: {
         backgroundColor: colors.brand,

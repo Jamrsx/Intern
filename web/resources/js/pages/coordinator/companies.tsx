@@ -18,11 +18,11 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import {
+    create as createCompany,
     deactivated as deactivatedCompaniesIndex,
     destroy as destroyCompany,
+    edit as editCompany,
     index as coordinatorCompaniesIndex,
-    store,
-    update,
 } from '@/routes/coordinators/companies';
 import {
     destroy as destroyDepartment,
@@ -41,6 +41,10 @@ type CompanyRow = {
     id: number;
     name: string;
     address: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    geofence_radius_meters: number;
+    geofence_enabled: boolean;
     contact_person: string | null;
     contact_email: string | null;
     contact_phone: string | null;
@@ -56,11 +60,16 @@ type Props = {
     deactivated_count: number;
 };
 
-type DepartmentDraft = {
-    name: string;
-};
-
 const COMPANY_GROUP_STATE_KEY = 'coordinator-companies-group-state';
+
+function formatGeofenceRadius(meters: number): string {
+    if (meters >= 1000) {
+        const km = meters / 1000;
+        return km % 1 === 0 ? `${km} km` : `${km.toFixed(1)} km`;
+    }
+
+    return `${meters} m`;
+}
 
 function readStoredCompanyGroupState(): Record<number, boolean> {
     if (typeof window === 'undefined') {
@@ -92,27 +101,18 @@ function persistCompanyGroupState(state: Record<number, boolean>): void {
     localStorage.setItem(COMPANY_GROUP_STATE_KEY, JSON.stringify(state));
 }
 
-const emptyDepartmentDraft = (): DepartmentDraft => ({ name: '' });
-
 export default function CoordinatorCompanies({
     companies,
     deactivated_count,
 }: Props) {
-    const [createOpen, setCreateOpen] = useState(false);
-    const [editCompany, setEditCompany] = useState<CompanyRow | null>(null);
     const [addDepartmentCompany, setAddDepartmentCompany] =
         useState<CompanyRow | null>(null);
     const [editDepartment, setEditDepartment] = useState<{
         company: CompanyRow;
         department: DepartmentRow;
     } | null>(null);
-    const [createDepartments, setCreateDepartments] = useState<DepartmentDraft[]>(
-        [emptyDepartmentDraft()],
-    );
     const [openGroups, setOpenGroups] = useState<Record<number, boolean>>({});
     const [hasLoadedGroupState, setHasLoadedGroupState] = useState(false);
-
-    const storeRoute = store();
 
     useLayoutEffect(() => {
         const storedState = readStoredCompanyGroupState();
@@ -150,22 +150,6 @@ export default function CoordinatorCompanies({
 
             return next;
         });
-    };
-
-    const resetCreateForm = () => {
-        setCreateDepartments([emptyDepartmentDraft()]);
-    };
-
-    const updateCreateDepartment = (index: number, name: string) => {
-        setCreateDepartments((rows) =>
-            rows.map((row, rowIndex) =>
-                rowIndex === index ? { name } : row,
-            ),
-        );
-    };
-
-    const addCreateDepartmentRow = () => {
-        setCreateDepartments((rows) => [...rows, emptyDepartmentDraft()]);
     };
 
     const handleDeactivateCompany = (company: CompanyRow) => {
@@ -228,14 +212,13 @@ export default function CoordinatorCompanies({
                                 </Link>
                             </Button>
                             <Button
-                                onClick={() => {
-                                    resetCreateForm();
-                                    setCreateOpen(true);
-                                }}
+                                asChild
                                 className="bg-brand text-brand-foreground hover:bg-brand-hover"
                             >
-                                <Plus className="mr-2 size-4" />
-                                Add Company
+                                <Link href={createCompany().url}>
+                                    <Plus className="mr-2 size-4" />
+                                    Add Company
+                                </Link>
                             </Button>
                         </div>
                     }
@@ -293,6 +276,17 @@ export default function CoordinatorCompanies({
                                                             intern(s)
                                                         </Badge>
                                                     )}
+                                                    {company.geofence_enabled &&
+                                                    company.latitude !== null &&
+                                                    company.longitude !==
+                                                        null ? (
+                                                        <Badge variant="outline">
+                                                            Geofence{' '}
+                                                            {formatGeofenceRadius(
+                                                                company.geofence_radius_meters,
+                                                            )}
+                                                        </Badge>
+                                                    ) : null}
                                                 </div>
                                                 <p className="mt-1 text-sm text-muted-foreground">
                                                     {company.address ??
@@ -315,12 +309,18 @@ export default function CoordinatorCompanies({
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() =>
-                                                        setEditCompany(company)
-                                                    }
+                                                    asChild
                                                 >
-                                                    <Pencil className="mr-1 size-3.5" />
-                                                    Edit Company
+                                                    <Link
+                                                        href={
+                                                            editCompany(
+                                                                company.id,
+                                                            ).url
+                                                        }
+                                                    >
+                                                        <Pencil className="mr-1 size-3.5" />
+                                                        Edit Company
+                                                    </Link>
                                                 </Button>
                                                 <Button
                                                     variant="outline"
@@ -469,196 +469,6 @@ export default function CoordinatorCompanies({
                     </div>
                 )}
             </div>
-
-            <AppModal
-                open={createOpen}
-                onOpenChange={setCreateOpen}
-                title="Add Company"
-                description="Register an OJT partner company with address and departments."
-                className="sm:max-w-xl"
-            >
-                <Form
-                    action={storeRoute.url}
-                    method={storeRoute.method}
-                    onSuccess={() => {
-                        setCreateOpen(false);
-                        resetCreateForm();
-                    }}
-                    className="space-y-4"
-                >
-                    {({ processing, errors }) => (
-                        <>
-                            <div className="grid gap-2">
-                                <Label htmlFor="create-company-name">
-                                    Company name
-                                </Label>
-                                <Input
-                                    id="create-company-name"
-                                    name="name"
-                                    required
-                                    placeholder="Opol LGU"
-                                />
-                                <InputError message={errors.name} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="create-company-address">
-                                    Address
-                                </Label>
-                                <textarea
-                                    id="create-company-address"
-                                    name="address"
-                                    rows={3}
-                                    placeholder="Company address"
-                                    className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                />
-                                <InputError message={errors.address} />
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <Label>Departments</Label>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={addCreateDepartmentRow}
-                                    >
-                                        <Plus className="mr-1 size-3.5" />
-                                        Add department
-                                    </Button>
-                                </div>
-
-                                {createDepartments.map((row, index) => (
-                                    <div key={index} className="grid gap-2">
-                                        <Input
-                                            name={`departments[${index}][name]`}
-                                            value={row.name}
-                                            onChange={(event) =>
-                                                updateCreateDepartment(
-                                                    index,
-                                                    event.target.value,
-                                                )
-                                            }
-                                            required
-                                            placeholder="HR"
-                                        />
-                                        <InputError
-                                            message={
-                                                errors[
-                                                    `departments.${index}.name`
-                                                ]
-                                            }
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="flex justify-end gap-2 pt-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setCreateOpen(false)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    disabled={processing}
-                                    className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                                >
-                                    {processing && <Spinner />}
-                                    Create Company
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </Form>
-            </AppModal>
-
-            {editCompany && (
-                <AppModal
-                    open={!!editCompany}
-                    onOpenChange={(open) => !open && setEditCompany(null)}
-                    title="Edit Company"
-                    description={`Update ${editCompany.name}`}
-                >
-                    <Form
-                        action={update(editCompany.id).url}
-                        method={update(editCompany.id).method}
-                        onSuccess={() => setEditCompany(null)}
-                        className="space-y-4"
-                    >
-                        {({ processing, errors }) => (
-                            <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="edit-company-name">
-                                        Company name
-                                    </Label>
-                                    <Input
-                                        id="edit-company-name"
-                                        name="name"
-                                        defaultValue={editCompany.name}
-                                        required
-                                    />
-                                    <InputError message={errors.name} />
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="edit-company-address">
-                                        Address
-                                    </Label>
-                                    <textarea
-                                        id="edit-company-address"
-                                        name="address"
-                                        rows={3}
-                                        defaultValue={
-                                            editCompany.address ?? ''
-                                        }
-                                        className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                                    />
-                                    <InputError message={errors.address} />
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="hidden"
-                                        name="is_active"
-                                        value="0"
-                                    />
-                                    <Checkbox
-                                        id="edit-company-active"
-                                        name="is_active"
-                                        value="1"
-                                        defaultChecked={editCompany.is_active}
-                                    />
-                                    <Label htmlFor="edit-company-active">
-                                        Active company
-                                    </Label>
-                                </div>
-
-                                <div className="flex justify-end gap-2 pt-2">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => setEditCompany(null)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                                    >
-                                        {processing && <Spinner />}
-                                        Save changes
-                                    </Button>
-                                </div>
-                            </>
-                        )}
-                    </Form>
-                </AppModal>
-            )}
 
             {addDepartmentCompany && (
                 <AppModal

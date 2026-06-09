@@ -33,6 +33,7 @@ function buildValidationError(
         (typeof payload?.message === 'string' ? payload.message : null) ??
         fieldErrors.embedding?.[0] ??
         fieldErrors.action?.[0] ??
+        fieldErrors.latitude?.[0] ??
         fallback;
 
     return new ApiError(message, status, fieldErrors);
@@ -139,11 +140,18 @@ export async function enrollInternFace(
     return payload as InternFaceEnrollResponse;
 }
 
+export type PunchLocation = {
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number | null;
+};
+
 export async function punchInternTime(
     token: string,
     action: 'time_in' | 'time_out',
     embedding: number[],
     deviceInfo?: string,
+    location?: PunchLocation | null,
 ): Promise<InternTimePunchResponse> {
     const url = `${getApiBaseUrl()}/api/intern/time/punch`;
 
@@ -164,6 +172,18 @@ export async function punchInternTime(
             action,
             embedding,
             ...(deviceInfo ? { device_info: deviceInfo } : {}),
+            ...(location
+                ? {
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                      ...(location.accuracyMeters != null
+                          ? {
+                                location_accuracy_meters:
+                                    location.accuracyMeters,
+                            }
+                          : {}),
+                  }
+                : {}),
         }),
     });
 

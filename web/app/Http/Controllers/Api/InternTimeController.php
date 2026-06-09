@@ -63,6 +63,15 @@ class InternTimeController extends Controller
                 (string) $request->validated('action'),
                 $embedding,
                 $request->validated('device_info'),
+                $request->validated('latitude') !== null
+                    ? (float) $request->validated('latitude')
+                    : null,
+                $request->validated('longitude') !== null
+                    ? (float) $request->validated('longitude')
+                    : null,
+                $request->validated('location_accuracy_meters') !== null
+                    ? (float) $request->validated('location_accuracy_meters')
+                    : null,
             ),
         );
     }

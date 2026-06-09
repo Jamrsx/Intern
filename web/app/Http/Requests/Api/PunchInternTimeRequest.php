@@ -21,6 +21,9 @@ class PunchInternTimeRequest extends FormRequest
         return [
             'action' => ['required', Rule::in(['time_in', 'time_out'])],
             'device_info' => ['nullable', 'string', 'max:500'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'location_accuracy_meters' => ['nullable', 'numeric', 'min:0', 'max:500'],
             ...FaceEmbedding::rules('embedding'),
         ];
     }

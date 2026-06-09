@@ -24,6 +24,16 @@ export type LunchNotice = {
     can_time_in_now: boolean;
 };
 
+export type GeofenceInfo = {
+    required: boolean;
+    enabled: boolean;
+    configured: boolean;
+    company_name: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    radius_meters: number | null;
+};
+
 export type InternTimeStatusResponse = {
     face_enrolled: boolean;
     face_enrolled_at: string | null;
@@ -36,6 +46,7 @@ export type InternTimeStatusResponse = {
     today_hours: number;
     lunch_break?: LunchBreakInfo;
     lunch_notice?: LunchNotice | null;
+    geofence?: GeofenceInfo;
 };
 
 export type InternTimeLogsResponse = {

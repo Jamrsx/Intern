@@ -30,6 +30,10 @@ class StoreCompanyRequest extends FormRequest
                 Rule::unique('companies', 'name')->where('course_id', $courseId),
             ],
             'address' => ['nullable', 'string', 'max:500'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'geofence_radius_meters' => ['required', 'integer', 'min:1', 'max:5000'],
+            'geofence_enabled' => ['sometimes', 'boolean'],
             'departments' => ['required', 'array', 'min:1', 'max:20'],
             'departments.*.name' => ['required', 'string', 'max:100', 'distinct'],
         ];

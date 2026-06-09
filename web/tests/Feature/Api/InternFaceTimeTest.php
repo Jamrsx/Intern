@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Company;
 use App\Models\OjtSchedule;
 use App\Models\StudentFaceProfile;
 use App\Models\TimeLog;
@@ -281,4 +282,80 @@ it('auto times out a morning session at noon and blocks time in until 1pm', func
         ->sum('duration_minutes');
 
     expect($totalMinutes)->toBe(480);
+});
+
+it('returns geofence info on time status when student has a company fence', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['student' => $student, 'course' => $course] = createCoordinatorWithSection();
+
+    $company = Company::query()->create([
+        'course_id' => $course->id,
+        'name' => 'On-site Partner',
+        'address' => 'Opol',
+        'latitude' => 8.4542,
+        'longitude' => 124.6319,
+        'geofence_radius_meters' => 10,
+        'geofence_enabled' => true,
+        'is_active' => true,
+    ]);
+
+    $student->update(['company_id' => $company->id]);
+
+    Passport::actingAs($student->user);
+
+    $this->getJson('/api/intern/time/status')
+        ->assertSuccessful()
+        ->assertJsonPath('geofence.required', true)
+        ->assertJsonPath('geofence.company_name', 'On-site Partner')
+        ->assertJsonPath('geofence.radius_meters', 10);
+});
+
+it('rejects punch outside company geofence and allows punch inside', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['student' => $student, 'course' => $course] = createCoordinatorWithSection();
+
+    $company = Company::query()->create([
+        'course_id' => $course->id,
+        'name' => 'On-site Partner',
+        'address' => 'Opol',
+        'latitude' => 8.4542,
+        'longitude' => 124.6319,
+        'geofence_radius_meters' => 10,
+        'geofence_enabled' => true,
+        'is_active' => true,
+    ]);
+
+    $student->update(['company_id' => $company->id]);
+
+    StudentFaceProfile::query()->create([
+        'student_id' => $student->id,
+        'reference_image_path' => 'embedded/on-device',
+        'face_embedding' => fakeFaceEmbedding(0.1),
+        'enrolled_at' => now(),
+        'is_active' => true,
+    ]);
+
+    Passport::actingAs($student->user);
+
+    $this->postJson('/api/intern/time/punch', [
+        'action' => 'time_in',
+        'embedding' => fakeFaceEmbedding(0.1),
+        'latitude' => 8.5000,
+        'longitude' => 125.0000,
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['action']);
+
+    $this->postJson('/api/intern/time/punch', [
+        'action' => 'time_in',
+        'embedding' => fakeFaceEmbedding(0.1),
+        'latitude' => 8.4542,
+        'longitude' => 124.6319,
+    ])
+        ->assertSuccessful()
+        ->assertJsonPath('log.is_open', true);
 });

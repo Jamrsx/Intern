@@ -15,6 +15,7 @@ class InternTimePunchService
 {
     public function __construct(
         private readonly LunchAutoTimeoutService $lunchAutoTimeoutService,
+        private readonly CompanyGeofenceGuard $companyGeofenceGuard,
     ) {}
 
     /**
@@ -67,6 +68,7 @@ class InternTimePunchService
             'today_hours' => round($todayMinutes / 60, 2),
             'lunch_break' => LunchBreak::toStatusPayload(),
             'lunch_notice' => $this->lunchAutoTimeoutService->currentNotice($student, $justApplied),
+            'geofence' => $this->companyGeofenceGuard->statusPayload($student),
         ];
     }
 
@@ -123,9 +125,23 @@ class InternTimePunchService
      * @param  list<float>  $embedding
      * @return array{message: string, log: array<string, mixed>, match_distance: float}
      */
-    public function punch(Student $student, string $action, array $embedding, ?string $deviceInfo = null): array
-    {
+    public function punch(
+        Student $student,
+        string $action,
+        array $embedding,
+        ?string $deviceInfo = null,
+        ?float $latitude = null,
+        ?float $longitude = null,
+        ?float $locationAccuracyMeters = null,
+    ): array {
         $this->lunchAutoTimeoutService->applyIfNeeded($student);
+
+        $this->companyGeofenceGuard->assertPunchAllowed(
+            $student,
+            $latitude,
+            $longitude,
+            $locationAccuracyMeters,
+        );
 
         $faceProfile = $student->faceProfile()
             ->where('is_active', true)

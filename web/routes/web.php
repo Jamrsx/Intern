@@ -122,7 +122,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('companies/{company}/reactivate', [CoordinatorCompanyController::class, 'reactivate'])
                 ->name('companies.reactivate');
             Route::resource('companies', CoordinatorCompanyController::class)
-                ->except(['show', 'create', 'edit']);
+                ->except(['show']);
             Route::post('companies/{company}/departments', [CoordinatorCompanyController::class, 'storeDepartment'])
                 ->name('companies.departments.store');
             Route::patch('companies/{company}/departments/{department}', [CoordinatorCompanyController::class, 'updateDepartment'])

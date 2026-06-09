@@ -49,6 +49,34 @@ class CompanyController extends Controller
         ]);
     }
 
+    public function create(Request $request): Response
+    {
+        $this->coordinatorSectionOrFail($request);
+
+        return Inertia::render('coordinator/companies/create');
+    }
+
+    public function edit(Request $request, Company $company): Response
+    {
+        $section = $this->coordinatorSectionOrFail($request);
+        $course = $section->course;
+        $this->ensureCompanyBelongsToCourse($company, $course);
+
+        $company->load([
+            'departments' => fn ($query) => $query
+                ->withCount([
+                    'students as students_count' => fn ($studentQuery) => $studentQuery
+                        ->where('is_active', true)
+                        ->where('section_id', $section->id),
+                ])
+                ->orderBy('name'),
+        ]);
+
+        return Inertia::render('coordinator/companies/edit', [
+            'company' => $this->companyPayload($company, $section),
+        ]);
+    }
+
     public function store(StoreCompanyRequest $request): RedirectResponse
     {
         $course = $this->coordinatorCourseOrFail($request);
@@ -58,6 +86,10 @@ class CompanyController extends Controller
                 'course_id' => $course->id,
                 'name' => $request->validated('name'),
                 'address' => $request->validated('address'),
+                'latitude' => $request->validated('latitude'),
+                'longitude' => $request->validated('longitude'),
+                'geofence_radius_meters' => $request->validated('geofence_radius_meters'),
+                'geofence_enabled' => $request->boolean('geofence_enabled', true),
                 'is_active' => true,
             ]);
 
@@ -85,6 +117,10 @@ class CompanyController extends Controller
         $company->update([
             'name' => $request->validated('name'),
             'address' => $request->validated('address'),
+            'latitude' => $request->validated('latitude'),
+            'longitude' => $request->validated('longitude'),
+            'geofence_radius_meters' => $request->validated('geofence_radius_meters'),
+            'geofence_enabled' => $request->boolean('geofence_enabled', $company->geofence_enabled),
             'is_active' => $request->boolean('is_active', $company->is_active),
         ]);
 
@@ -251,25 +287,49 @@ class CompanyController extends Controller
             ])
             ->orderBy('name')
             ->get()
-            ->map(fn (Company $company) => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'address' => $company->address,
-                'contact_person' => $company->contact_person,
-                'contact_email' => $company->contact_email,
-                'contact_phone' => $company->contact_phone,
-                'is_active' => $company->is_active,
-                'departments_count' => $company->departments_count,
-                'supervisors_count' => $company->supervisors_count,
-                'students_count' => $company->students_count,
-                'departments' => $company->departments->map(fn (Department $department) => [
-                    'id' => $department->id,
-                    'name' => $department->name,
-                    'is_active' => $department->is_active,
-                    'students_count' => $department->students_count,
-                ])->values()->all(),
-            ])
+            ->map(fn (Company $company) => $this->companyPayload($company, $section))
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function companyPayload(Company $company, ?Section $section = null): array
+    {
+        if ($section !== null && ! $company->relationLoaded('departments')) {
+            $company->load([
+                'departments' => fn ($query) => $query
+                    ->withCount([
+                        'students as students_count' => fn ($studentQuery) => $studentQuery
+                            ->where('is_active', true)
+                            ->where('section_id', $section->id),
+                    ])
+                    ->orderBy('name'),
+            ]);
+        }
+
+        return [
+            'id' => $company->id,
+            'name' => $company->name,
+            'address' => $company->address,
+            'latitude' => $company->latitude,
+            'longitude' => $company->longitude,
+            'geofence_radius_meters' => $company->geofence_radius_meters,
+            'geofence_enabled' => $company->geofence_enabled,
+            'contact_person' => $company->contact_person,
+            'contact_email' => $company->contact_email,
+            'contact_phone' => $company->contact_phone,
+            'is_active' => $company->is_active,
+            'departments_count' => $company->departments_count ?? $company->departments()->count(),
+            'supervisors_count' => $company->supervisors_count ?? $company->supervisors()->count(),
+            'students_count' => $company->students_count ?? 0,
+            'departments' => $company->departments?->map(fn (Department $department) => [
+                'id' => $department->id,
+                'name' => $department->name,
+                'is_active' => $department->is_active,
+                'students_count' => $department->students_count ?? 0,
+            ])->values()->all() ?? [],
+        ];
     }
 }

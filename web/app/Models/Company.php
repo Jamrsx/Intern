@@ -16,6 +16,10 @@ class Company extends Model
         'section_id',
         'name',
         'address',
+        'latitude',
+        'longitude',
+        'geofence_radius_meters',
+        'geofence_enabled',
         'contact_person',
         'contact_email',
         'contact_phone',
@@ -28,6 +32,10 @@ class Company extends Model
     protected function casts(): array
     {
         return [
+            'latitude' => 'float',
+            'longitude' => 'float',
+            'geofence_radius_meters' => 'integer',
+            'geofence_enabled' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

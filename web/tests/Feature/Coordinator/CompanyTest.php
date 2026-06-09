@@ -18,9 +18,18 @@ it('allows a coordinator to manage companies and departments', function () {
     ['coordinator' => $coordinator, 'section' => $section, 'course' => $course] = createCoordinatorWithSection();
 
     $this->actingAs($coordinator)
+        ->get(route('coordinators.companies.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page->component('coordinator/companies/create'));
+
+    $this->actingAs($coordinator)
         ->post(route('coordinators.companies.store'), [
             'name' => 'Opol LGU',
             'address' => 'Opol, Misamis Oriental',
+            'latitude' => 8.4542,
+            'longitude' => 124.6319,
+            'geofence_radius_meters' => 10,
+            'geofence_enabled' => true,
             'departments' => [
                 ['name' => 'HR'],
                 ['name' => 'Finance'],
@@ -33,6 +42,10 @@ it('allows a coordinator to manage companies and departments', function () {
     expect($company)->not->toBeNull();
     expect($company?->course_id)->toBe($course->id);
     expect($company?->address)->toBe('Opol, Misamis Oriental');
+    expect((float) $company?->latitude)->toBe(8.4542);
+    expect((float) $company?->longitude)->toBe(124.6319);
+    expect($company?->geofence_radius_meters)->toBe(10);
+    expect($company?->geofence_enabled)->toBeTrue();
     expect($company?->departments()->pluck('name')->all())->toBe(['Finance', 'HR']);
 
     $department = Department::query()
@@ -41,9 +54,20 @@ it('allows a coordinator to manage companies and departments', function () {
         ->firstOrFail();
 
     $this->actingAs($coordinator)
+        ->get(route('coordinators.companies.edit', $company))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/companies/edit')
+            ->where('company.name', 'Opol LGU'));
+
+    $this->actingAs($coordinator)
         ->patch(route('coordinators.companies.update', $company), [
             'name' => 'Opol LGU Office',
             'address' => 'Updated address',
+            'latitude' => 8.46,
+            'longitude' => 124.64,
+            'geofence_radius_meters' => 1500,
+            'geofence_enabled' => true,
             'is_active' => '1',
         ])
         ->assertRedirect(route('coordinators.companies.index'));
