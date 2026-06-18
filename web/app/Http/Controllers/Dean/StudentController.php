@@ -333,7 +333,10 @@ class StudentController extends Controller
         }
 
         return Section::query()
-            ->with('schoolYear:id,name,is_active')
+            ->with([
+                'schoolYear:id,name,is_active',
+                'coordinator:id,name,email',
+            ])
             ->where('course_id', $course->id)
             ->where('is_active', true)
             ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
@@ -344,6 +347,11 @@ class StudentController extends Controller
                 'name' => $section->name,
                 'display_name' => trim("{$course->code} {$section->name}"),
                 'school_year' => $section->schoolYear?->name,
+                'coordinator' => $section->coordinator ? [
+                    'id' => $section->coordinator->id,
+                    'name' => $section->coordinator->name,
+                    'email' => $section->coordinator->email,
+                ] : null,
             ])
             ->values()
             ->all();
@@ -362,6 +370,7 @@ class StudentController extends Controller
             ->with([
                 'user:id,name,email,is_active',
                 'section.schoolYear:id,name',
+                'section.coordinator:id,name,email',
                 'company:id,name',
                 'department:id,name,company_id',
                 'supervisor.user:id,name',
@@ -383,6 +392,11 @@ class StudentController extends Controller
                     'id' => $student->section->id,
                     'display_name' => trim("{$course->code} {$student->section->name}"),
                     'school_year' => $student->section->schoolYear?->name,
+                    'coordinator' => $student->section->coordinator ? [
+                        'id' => $student->section->coordinator->id,
+                        'name' => $student->section->coordinator->name,
+                        'email' => $student->section->coordinator->email,
+                    ] : null,
                 ] : null,
                 'company_id' => $student->company_id,
                 'company' => $student->company ? [

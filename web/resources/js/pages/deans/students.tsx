@@ -43,6 +43,17 @@ type SectionOption = {
     name: string;
     display_name: string;
     school_year: string | null | undefined;
+    coordinator: {
+        id: number;
+        name: string;
+        email: string;
+    } | null;
+};
+
+type CoordinatorSummary = {
+    id: number;
+    name: string;
+    email: string;
 };
 
 type CompanyOption = {
@@ -71,6 +82,7 @@ type StudentRow = {
         id: number;
         display_name: string;
         school_year: string | null | undefined;
+        coordinator: CoordinatorSummary | null;
     } | null;
     company_id: number | null;
     company: { id: number; name: string } | null;
@@ -87,6 +99,7 @@ type StudentGroup = {
     sectionId: number;
     displayName: string;
     schoolYear: string | null | undefined;
+    coordinator: CoordinatorSummary | null;
     students: StudentRow[];
 };
 
@@ -149,6 +162,8 @@ function StudentGroupTable({
                 <thead>
                     <tr className="border-b bg-muted/40 text-left">
                         <th className="px-4 py-3 font-medium">Student</th>
+                        <th className="px-4 py-3 font-medium">Section</th>
+                        <th className="px-4 py-3 font-medium">Coordinator</th>
                         <th className="px-4 py-3 font-medium">Email</th>
                         <th className="px-4 py-3 font-medium">OJT Company</th>
                         <th className="px-4 py-3 font-medium">Supervisor</th>
@@ -171,6 +186,32 @@ function StudentGroupTable({
                                 <div className="text-xs text-muted-foreground">
                                     Student ID: {student.student_number}
                                 </div>
+                            </td>
+                            <td className="px-4 py-3">
+                                <div className="font-medium">
+                                    {student.section?.display_name ?? (
+                                        <span className="text-muted-foreground">
+                                            Unassigned
+                                        </span>
+                                    )}
+                                </div>
+                                {student.section?.school_year ? (
+                                    <div className="text-xs text-muted-foreground">
+                                        {student.section.school_year}
+                                    </div>
+                                ) : null}
+                            </td>
+                            <td className="px-4 py-3">
+                                {student.section?.coordinator?.name ?? (
+                                    <span className="text-amber-600">
+                                        Unassigned
+                                    </span>
+                                )}
+                                {student.section?.coordinator?.email ? (
+                                    <div className="text-xs text-muted-foreground">
+                                        {student.section.coordinator.email}
+                                    </div>
+                                ) : null}
                             </td>
                             <td className="px-4 py-3 text-muted-foreground">
                                 {student.email}
@@ -433,6 +474,7 @@ export default function DeanStudents({
                 sectionId: section.id,
                 displayName: section.display_name,
                 schoolYear: section.school_year,
+                coordinator: section.coordinator,
                 students: bySection.get(section.id) ?? [],
             }));
     }, [filteredStudents, sections]);
@@ -802,7 +844,30 @@ export default function DeanStudents({
                                                         </Badge>
                                                     </div>
                                                     <p className="mt-1 text-sm text-muted-foreground">
-                                                        Click to expand or collapse
+                                                        Coordinator:{' '}
+                                                        {group.coordinator ? (
+                                                            <span className="text-foreground">
+                                                                {
+                                                                    group
+                                                                        .coordinator
+                                                                        .name
+                                                                }
+                                                                <span className="text-muted-foreground">
+                                                                    {' '}
+                                                                    (
+                                                                    {
+                                                                        group
+                                                                            .coordinator
+                                                                            .email
+                                                                    }
+                                                                    )
+                                                                </span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-amber-600">
+                                                                Unassigned
+                                                            </span>
+                                                        )}
                                                     </p>
                                                 </div>
                                                 <ChevronDown

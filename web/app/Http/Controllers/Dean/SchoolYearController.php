@@ -7,6 +7,7 @@ use App\Http\Requests\Dean\StoreSchoolYearRequest;
 use App\Http\Requests\Dean\UpdateSchoolYearRequest;
 use App\Models\Course;
 use App\Models\SchoolYear;
+use App\Services\SchoolYearArchivingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,10 @@ use Inertia\Response;
 
 class SchoolYearController extends Controller
 {
+    public function __construct(
+        private readonly SchoolYearArchivingService $schoolYearArchivingService,
+    ) {}
+
     public function index(Request $request): Response
     {
         $course = $this->deanCourse($request);
@@ -59,7 +64,15 @@ class SchoolYearController extends Controller
 
         DB::transaction(function () use ($request, $isActive): void {
             if ($isActive) {
+                $schoolYearsToArchive = SchoolYear::query()
+                    ->where('is_active', true)
+                    ->get();
+
                 SchoolYear::query()->update(['is_active' => false]);
+
+                foreach ($schoolYearsToArchive as $schoolYear) {
+                    $this->schoolYearArchivingService->archive($schoolYear);
+                }
             }
 
             SchoolYear::query()->create([
@@ -81,12 +94,24 @@ class SchoolYearController extends Controller
     public function update(UpdateSchoolYearRequest $request, SchoolYear $schoolYear): RedirectResponse
     {
         $isActive = $request->boolean('is_active');
+        $archivedStudents = 0;
 
-        DB::transaction(function () use ($request, $schoolYear, $isActive): void {
+        DB::transaction(function () use ($request, $schoolYear, $isActive, &$archivedStudents): void {
             if ($isActive) {
+                $schoolYearsToArchive = SchoolYear::query()
+                    ->whereKeyNot($schoolYear->id)
+                    ->where('is_active', true)
+                    ->get();
+
                 SchoolYear::query()
                     ->whereKeyNot($schoolYear->id)
                     ->update(['is_active' => false]);
+
+                foreach ($schoolYearsToArchive as $inactiveSchoolYear) {
+                    $archivedStudents += $this->schoolYearArchivingService->archive(
+                        $inactiveSchoolYear,
+                    );
+                }
             }
 
             $schoolYear->update([
@@ -95,11 +120,25 @@ class SchoolYearController extends Controller
                 'end_date' => $request->validated('end_date'),
                 'is_active' => $isActive,
             ]);
+
+            if (! $isActive) {
+                $archivedStudents += $this->schoolYearArchivingService->archive($schoolYear);
+            }
         });
+
+        $message = 'School year updated successfully.';
+
+        if (! $isActive && $archivedStudents > 0) {
+            $message = "{$schoolYear->name} was closed. {$archivedStudents} student account(s) were set to inactive.";
+        } elseif (! $isActive) {
+            $message = "{$schoolYear->name} was closed.";
+        } elseif ($archivedStudents > 0) {
+            $message .= " {$archivedStudents} student account(s) from other school years were set to inactive.";
+        }
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => 'School year updated successfully.',
+            'message' => $message,
         ]);
 
         return redirect()->route('deans.school-years.index');
@@ -107,15 +146,34 @@ class SchoolYearController extends Controller
 
     public function activate(SchoolYear $schoolYear): RedirectResponse
     {
-        DB::transaction(function () use ($schoolYear): void {
+        $archivedStudents = 0;
+
+        DB::transaction(function () use ($schoolYear, &$archivedStudents): void {
+            $schoolYearsToArchive = SchoolYear::query()
+                ->whereKeyNot($schoolYear->id)
+                ->where('is_active', true)
+                ->get();
+
             SchoolYear::query()->update(['is_active' => false]);
+
+            foreach ($schoolYearsToArchive as $inactiveSchoolYear) {
+                $archivedStudents += $this->schoolYearArchivingService->archive(
+                    $inactiveSchoolYear,
+                );
+            }
 
             $schoolYear->update(['is_active' => true]);
         });
 
+        $message = "{$schoolYear->name} is now the active school year.";
+
+        if ($archivedStudents > 0) {
+            $message .= " {$archivedStudents} student account(s) from other school years were set to inactive.";
+        }
+
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => "{$schoolYear->name} is now the active school year.",
+            'message' => $message,
         ]);
 
         return redirect()->route('deans.school-years.index');
@@ -123,28 +181,104 @@ class SchoolYearController extends Controller
 
     public function destroy(Request $request, SchoolYear $schoolYear): RedirectResponse
     {
-        $course = $this->deanCourse($request);
+        $archivedStudents = 0;
 
-        $hasSectionsForCourse = $course !== null
-            && $schoolYear->sections()->where('course_id', $course->id)->exists();
+        DB::transaction(function () use ($schoolYear, &$archivedStudents): void {
+            $schoolYear->update(['is_active' => false]);
+            $archivedStudents = $this->schoolYearArchivingService->archive($schoolYear);
+        });
 
-        if ($hasSectionsForCourse) {
-            Inertia::flash('toast', [
-                'type' => 'error',
-                'message' => 'Cannot deactivate a school year that has sections in your course.',
-            ]);
+        $message = "{$schoolYear->name} was closed.";
 
-            return redirect()->route('deans.school-years.index');
+        if ($archivedStudents > 0) {
+            $message .= " {$archivedStudents} student account(s) were set to inactive.";
         }
-
-        $schoolYear->update(['is_active' => false]);
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => 'School year deactivated.',
+            'message' => $message,
         ]);
 
         return redirect()->route('deans.school-years.index');
+    }
+
+    public function archive(Request $request): Response
+    {
+        $course = $this->deanCourse($request);
+
+        abort_if($course === null, 403, 'You are not assigned to a course yet.');
+
+        SchoolYear::query()
+            ->where('is_active', false)
+            ->orderByDesc('name')
+            ->get()
+            ->each(fn (SchoolYear $schoolYear) => $this->schoolYearArchivingService->archive($schoolYear));
+
+        $archivedSchoolYears = SchoolYear::query()
+            ->where('is_active', false)
+            ->orderByDesc('name')
+            ->with([
+                'sections' => fn ($query) => $query
+                    ->where('course_id', $course->id)
+                    ->with([
+                        'coordinator:id,name,email',
+                        'students' => fn ($studentQuery) => $studentQuery
+                            ->with([
+                                'user:id,email,is_active',
+                                'company:id,name',
+                                'department:id,name',
+                                'supervisor.user:id,name',
+                            ])
+                            ->orderBy('last_name')
+                            ->orderBy('first_name'),
+                    ])
+                    ->orderBy('name'),
+            ])
+            ->get()
+            ->map(fn (SchoolYear $schoolYear) => [
+                'id' => $schoolYear->id,
+                'name' => $schoolYear->name,
+                'start_date' => $schoolYear->start_date?->toDateString(),
+                'end_date' => $schoolYear->end_date?->toDateString(),
+                'sections' => $schoolYear->sections->map(fn ($section) => [
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'display_name' => trim("{$course->code} {$section->name}"),
+                    'is_active' => $section->is_active,
+                    'coordinator' => $section->coordinator ? [
+                        'id' => $section->coordinator->id,
+                        'name' => $section->coordinator->name,
+                        'email' => $section->coordinator->email,
+                    ] : null,
+                    'students' => $section->students->map(fn ($student) => [
+                        'id' => $student->id,
+                        'student_number' => $student->student_number,
+                        'full_name' => $student->fullName(),
+                        'email' => $student->user->email,
+                        'is_active' => $student->is_active && $student->user->is_active,
+                        'internship' => [
+                            'company' => $student->company?->name,
+                            'department' => $student->department?->name,
+                            'supervisor' => $student->supervisor?->user?->name,
+                        ],
+                    ])->values()->all(),
+                    'students_count' => $section->students->count(),
+                ])->values()->all(),
+                'sections_count' => $schoolYear->sections->count(),
+                'students_count' => $schoolYear->sections->sum(
+                    fn ($section) => $section->students->count(),
+                ),
+            ])
+            ->values();
+
+        return Inertia::render('deans/school-years/archive', [
+            'course' => [
+                'id' => $course->id,
+                'code' => $course->code,
+                'name' => $course->name,
+            ],
+            'archivedSchoolYears' => $archivedSchoolYears,
+        ]);
     }
 
     private function deanCourse(Request $request): ?Course

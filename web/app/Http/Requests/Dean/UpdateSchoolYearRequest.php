@@ -7,6 +7,13 @@ use Illuminate\Validation\Rule;
 
 class UpdateSchoolYearRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'is_active' => filter_var($this->input('is_active'), FILTER_VALIDATE_BOOLEAN),
+        ]);
+    }
+
     public function authorize(): bool
     {
         return $this->user()?->hasRole('dean') ?? false;
