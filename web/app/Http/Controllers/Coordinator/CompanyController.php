@@ -25,7 +25,16 @@ class CompanyController extends Controller
 
     public function index(Request $request): Response
     {
-        $section = $this->coordinatorSectionOrFail($request);
+        $section = $this->coordinatorSection($request);
+
+        if ($section === null) {
+            return Inertia::render('coordinator/companies', [
+                'section' => null,
+                'companies' => [],
+                'deactivated_count' => 0,
+            ]);
+        }
+
         $course = $section->course;
 
         $deactivatedCount = Company::query()
@@ -34,6 +43,7 @@ class CompanyController extends Controller
             ->count();
 
         return Inertia::render('coordinator/companies', [
+            'section' => $this->coordinatorSectionPayload($section),
             'companies' => $this->companyList($section, $course, activeOnly: true),
             'deactivated_count' => $deactivatedCount,
         ]);
@@ -41,10 +51,19 @@ class CompanyController extends Controller
 
     public function deactivated(Request $request): Response
     {
-        $section = $this->coordinatorSectionOrFail($request);
+        $section = $this->coordinatorSection($request);
+
+        if ($section === null) {
+            return Inertia::render('coordinator/companies/deactivated', [
+                'section' => null,
+                'companies' => [],
+            ]);
+        }
+
         $course = $section->course;
 
         return Inertia::render('coordinator/companies/deactivated', [
+            'section' => $this->coordinatorSectionPayload($section),
             'companies' => $this->companyList($section, $course, activeOnly: false),
         ]);
     }

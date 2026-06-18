@@ -26,11 +26,36 @@ trait ResolvesCoordinatorCourse
     private function coordinatorSection(Request $request): ?Section
     {
         return Section::query()
-            ->with('course')
+            ->with([
+                'course:id,code,name,required_hours',
+                'schoolYear:id,name',
+            ])
             ->where('coordinator_user_id', $request->user()->id)
             ->where('is_active', true)
             ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
             ->first();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function coordinatorSectionPayload(?Section $section): ?array
+    {
+        if ($section === null) {
+            return null;
+        }
+
+        return [
+            'id' => $section->id,
+            'name' => $section->name,
+            'display_name' => trim(($section->course?->code ?? '').' '.$section->name),
+            'school_year' => $section->schoolYear?->name,
+            'course' => $section->course ? [
+                'code' => $section->course->code,
+                'name' => $section->course->name,
+                'required_hours' => $section->course->required_hours,
+            ] : null,
+        ];
     }
 
     private function coordinatorSectionOrFail(Request $request): Section

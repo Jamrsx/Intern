@@ -58,7 +58,13 @@ type SupervisorGroup = {
     supervisors: SupervisorRow[];
 };
 
+type Section = {
+    id: number;
+    display_name: string;
+} | null;
+
 type Props = {
+    section: Section;
     companies: CompanyOption[];
     supervisors: SupervisorRow[];
 };
@@ -163,7 +169,11 @@ function DepartmentSelect({
     );
 }
 
-export default function CoordinatorSupervisors({ companies, supervisors }: Props) {
+export default function CoordinatorSupervisors({
+    section,
+    companies,
+    supervisors,
+}: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editSupervisor, setEditSupervisor] = useState<SupervisorRow | null>(
         null,
@@ -190,6 +200,7 @@ export default function CoordinatorSupervisors({ companies, supervisors }: Props
     }, []);
 
     console.log('Coordinator Supervisors page loaded', {
+        section,
         companiesCount: companies.length,
         supervisorsCount: supervisors.length,
     });
@@ -319,7 +330,7 @@ export default function CoordinatorSupervisors({ companies, supervisors }: Props
         });
     };
 
-    const canManageSupervisors = companies.length > 0;
+    const canManageSupervisors = section !== null && companies.length > 0;
 
     return (
         <>
@@ -328,7 +339,11 @@ export default function CoordinatorSupervisors({ companies, supervisors }: Props
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
                 <PageHeader
                     title="Supervisors"
-                    description="Create supervisor accounts and assign them to company departments."
+                    description={
+                        section
+                            ? `Create supervisor accounts and assign them to company departments for ${section.display_name}.`
+                            : 'You are not assigned to a section yet.'
+                    }
                     icon={BookOpen}
                     badgeText="Coordinator"
                     action={
@@ -344,7 +359,14 @@ export default function CoordinatorSupervisors({ companies, supervisors }: Props
                     }
                 />
 
-                {companies.length === 0 && (
+                {!section ? (
+                    <Card className="border-sidebar-border/70">
+                        <CardContent className="py-10 text-center text-muted-foreground">
+                            Ask your dean to assign you to a section before you
+                            can manage supervisors.
+                        </CardContent>
+                    </Card>
+                ) : companies.length === 0 && (
                     <Card className="border-sidebar-border/70">
                         <CardContent className="py-8 text-center text-sm text-muted-foreground">
                             No active companies found.{' '}

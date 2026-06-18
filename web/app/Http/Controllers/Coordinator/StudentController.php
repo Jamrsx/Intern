@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Coordinator\Concerns\FormatsEvaluationTemplates;
+use App\Http\Controllers\Coordinator\Concerns\ResolvesCoordinatorCourse;
 use App\Http\Requests\Coordinator\UpdateStudentPlacementRequest;
 use App\Models\Company;
 use App\Models\OjtEvaluation;
@@ -23,13 +24,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class StudentController extends Controller
 {
     use FormatsEvaluationTemplates;
+    use ResolvesCoordinatorCourse;
+
     public function index(Request $request): Response
     {
         $section = $this->coordinatorSection($request);
         $students = $this->studentList($section);
 
         return Inertia::render('coordinator/students', [
-            'section' => $this->sectionPayload($section),
+            'section' => $this->coordinatorSectionPayload($section),
             'students' => $students,
             'evaluation_stats' => $this->evaluationStats($section),
             'evaluation_templates' => $this->evaluationTemplateOptions($section),
@@ -55,7 +58,7 @@ class StudentController extends Controller
         $requiredHours = (int) $section->course->required_hours;
 
         return Inertia::render('coordinator/students/show', [
-            'section' => $this->sectionPayload($section),
+            'section' => $this->coordinatorSectionPayload($section),
             'student' => $this->studentPayload($student, $section),
             'progress' => OjtProgressCalculator::forStudent($student, $requiredHours),
             'documents' => $student->documents
@@ -136,55 +139,11 @@ class StudentController extends Controller
         );
     }
 
-    private function coordinatorSection(Request $request): ?Section
-    {
-        return Section::query()
-            ->with([
-                'course:id,code,name,required_hours',
-                'schoolYear:id,name',
-            ])
-            ->where('coordinator_user_id', $request->user()->id)
-            ->where('is_active', true)
-            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
-            ->first();
-    }
-
-    private function coordinatorSectionOrFail(Request $request): Section
-    {
-        $section = $this->coordinatorSection($request);
-
-        abort_if($section === null, 403, 'You are not assigned to a section yet.');
-
-        return $section;
-    }
-
     private function ensureStudentInSection(Student $student, Section $section): void
     {
         $student->loadMissing('section');
 
         abort_unless($student->section_id === $section->id, 404);
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function sectionPayload(?Section $section): ?array
-    {
-        if ($section === null) {
-            return null;
-        }
-
-        return [
-            'id' => $section->id,
-            'name' => $section->name,
-            'display_name' => trim("{$section->course->code} {$section->name}"),
-            'school_year' => $section->schoolYear?->name,
-            'course' => [
-                'code' => $section->course->code,
-                'name' => $section->course->name,
-                'required_hours' => $section->course->required_hours,
-            ],
-        ];
     }
 
     /**

@@ -21,31 +21,28 @@ class EvaluationTemplateController extends Controller
 
     public function index(Request $request): Response
     {
-        $section = $this->coordinatorSectionOrFail($request);
+        $section = $this->coordinatorSection($request);
 
-        $templates = OjtEvaluationTemplate::query()
-            ->where('section_id', $section->id)
-            ->withCount('items')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (OjtEvaluationTemplate $template) => [
-                'id' => $template->id,
-                'name' => $template->name,
-                'description' => $template->description,
-                'is_active' => $template->is_active,
-                'items_count' => $template->items_count,
-                'has_been_used' => $template->hasBeenUsed(),
-            ])
-            ->values()
-            ->all();
+        $templates = $section === null
+            ? []
+            : OjtEvaluationTemplate::query()
+                ->where('section_id', $section->id)
+                ->withCount('items')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (OjtEvaluationTemplate $template) => [
+                    'id' => $template->id,
+                    'name' => $template->name,
+                    'description' => $template->description,
+                    'is_active' => $template->is_active,
+                    'items_count' => $template->items_count,
+                    'has_been_used' => $template->hasBeenUsed(),
+                ])
+                ->values()
+                ->all();
 
         return Inertia::render('coordinator/evaluation-templates', [
-            'section' => [
-                'id' => $section->id,
-                'display_name' => trim(
-                    ($section->course?->code ?? '').' '.$section->name
-                ),
-            ],
+            'section' => $this->coordinatorSectionPayload($section),
             'templates' => $templates,
         ]);
     }
