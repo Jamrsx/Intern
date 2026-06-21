@@ -144,7 +144,7 @@ function CourseMajorsEditor({
                 <p className="text-xs text-muted-foreground">
                     Example: BSBA can have programs FM and MM. Add each program
                     below and optionally type the program head name (for
-                    reference only — no login is create).
+                    reference only — no login is created).
                 </p>
             </div>
 
