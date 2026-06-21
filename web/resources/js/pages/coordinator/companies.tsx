@@ -55,7 +55,13 @@ type CompanyRow = {
     departments: DepartmentRow[];
 };
 
+type Section = {
+    id: number;
+    display_name: string;
+} | null;
+
 type Props = {
+    section: Section;
     companies: CompanyRow[];
     deactivated_count: number;
 };
@@ -102,6 +108,7 @@ function persistCompanyGroupState(state: Record<number, boolean>): void {
 }
 
 export default function CoordinatorCompanies({
+    section,
     companies,
     deactivated_count,
 }: Props) {
@@ -122,6 +129,7 @@ export default function CoordinatorCompanies({
     }, []);
 
     console.log('Coordinator Companies page loaded', {
+        section,
         count: companies.length,
         deactivated_count,
     });
@@ -192,39 +200,52 @@ export default function CoordinatorCompanies({
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
                 <PageHeader
                     title="Companies"
-                    description="Create OJT companies, their address, and departments for intern placement."
+                    description={
+                        section
+                            ? `Create OJT companies, their address, and departments for ${section.display_name}.`
+                            : 'You are not assigned to a section yet.'
+                    }
                     icon={Building2}
                     badgeText="Coordinator"
                     action={
-                        <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" asChild>
-                                <Link href={deactivatedCompaniesIndex().url}>
-                                    <Archive className="mr-2 size-4" />
-                                    Deactivated
-                                    {deactivated_count > 0 && (
-                                        <Badge
-                                            variant="secondary"
-                                            className="ml-2"
-                                        >
-                                            {deactivated_count}
-                                        </Badge>
-                                    )}
-                                </Link>
-                            </Button>
-                            <Button
-                                asChild
-                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                            >
-                                <Link href={createCompany().url}>
-                                    <Plus className="mr-2 size-4" />
-                                    Add Company
-                                </Link>
-                            </Button>
-                        </div>
+                        section ? (
+                            <div className="flex flex-wrap gap-2">
+                                <Button variant="outline" asChild>
+                                    <Link href={deactivatedCompaniesIndex().url}>
+                                        <Archive className="mr-2 size-4" />
+                                        Deactivated
+                                        {deactivated_count > 0 && (
+                                            <Badge
+                                                variant="secondary"
+                                                className="ml-2"
+                                            >
+                                                {deactivated_count}
+                                            </Badge>
+                                        )}
+                                    </Link>
+                                </Button>
+                                <Button
+                                    asChild
+                                    className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                                >
+                                    <Link href={createCompany().url}>
+                                        <Plus className="mr-2 size-4" />
+                                        Add Company
+                                    </Link>
+                                </Button>
+                            </div>
+                        ) : undefined
                     }
                 />
 
-                {companies.length === 0 ? (
+                {!section ? (
+                    <Card className="border-sidebar-border/70">
+                        <CardContent className="py-10 text-center text-muted-foreground">
+                            Ask your dean to assign you to a section before you
+                            can manage companies.
+                        </CardContent>
+                    </Card>
+                ) : companies.length === 0 ? (
                     <Card className="border-sidebar-border/70">
                         <CardContent className="py-10 text-center text-sm text-muted-foreground">
                             No companies yet. Click{' '}

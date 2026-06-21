@@ -19,6 +19,20 @@ class UpdateCourseRequest extends FormRequest
         $this->merge([
             'is_active' => filter_var($this->input('is_active'), FILTER_VALIDATE_BOOLEAN),
         ]);
+
+        $majors = collect($this->input('majors', []))
+            ->filter(fn (mixed $major): bool => is_array($major) && filled($major['name'] ?? null))
+            ->map(fn (array $major): array => [
+                'name' => trim((string) $major['name']),
+                'code' => filled($major['code'] ?? null) ? trim((string) $major['code']) : null,
+                'program_head_name' => filled($major['program_head_name'] ?? null)
+                    ? trim((string) $major['program_head_name'])
+                    : null,
+            ])
+            ->values()
+            ->all();
+
+        $this->merge(['majors' => $majors]);
     }
 
     public function authorize(): bool
@@ -46,6 +60,10 @@ class UpdateCourseRequest extends FormRequest
                 Rule::unique(Course::class, 'dean_user_id')->ignore($course->id),
             ],
             'is_active' => ['required', 'boolean'],
+            'majors' => ['nullable', 'array'],
+            'majors.*.name' => ['required', 'string', 'max:255'],
+            'majors.*.code' => ['nullable', 'string', 'max:20'],
+            'majors.*.program_head_name' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

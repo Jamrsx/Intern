@@ -1,6 +1,6 @@
-import { Form, Head, router } from '@inertiajs/react';
-import { CalendarDays, Pencil, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { Form, Head, Link, router } from '@inertiajs/react';
+import { Archive, CalendarDays, Pencil, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { PageHeader } from '@/components/superadmin/page-header';
@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import {
     activate,
+    archive as schoolYearsArchive,
     destroy,
     index as schoolYearsIndex,
     store,
@@ -54,24 +55,45 @@ function formatDateRange(start: string | null, end: string | null): string {
 
 export default function DeanSchoolYears({ course, schoolYears }: Props) {
     const [createOpen, setCreateOpen] = useState(false);
+    const [createIsActive, setCreateIsActive] = useState(false);
     const [editSchoolYear, setEditSchoolYear] = useState<SchoolYear | null>(
         null,
     );
+    const [editIsActive, setEditIsActive] = useState(false);
     const storeRoute = store();
+
+    useEffect(() => {
+        if (createOpen) {
+            setCreateIsActive(false);
+        }
+    }, [createOpen]);
+
+    useEffect(() => {
+        if (editSchoolYear) {
+            setEditIsActive(editSchoolYear.is_active);
+        }
+    }, [editSchoolYear]);
+
+    const inactiveCount = schoolYears.filter(
+        (schoolYear) => !schoolYear.is_active,
+    ).length;
 
     console.log('Dean School Years page loaded', {
         course,
         count: schoolYears.length,
+        inactiveCount,
     });
 
-    const handleDeactivate = (schoolYear: SchoolYear) => {
+    const handleCloseSchoolYear = (schoolYear: SchoolYear) => {
         if (
             !confirm(
-                `Deactivate ${schoolYear.name}? You cannot deactivate a school year that has sections.`,
+                `Close ${schoolYear.name}? All sections and student accounts under this school year will be set to inactive.`,
             )
         ) {
             return;
         }
+
+        console.log('Closing school year', schoolYear.id, schoolYear.name);
 
         router.delete(destroy(schoolYear.id).url, {
             preserveScroll: true,
@@ -93,13 +115,24 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
                     icon={CalendarDays}
                     badgeText="Dean"
                     action={
-                        <Button
-                            onClick={() => setCreateOpen(true)}
-                            className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                        >
-                            <Plus className="mr-2 size-4" />
-                            Add School Year
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" asChild>
+                                <Link href={schoolYearsArchive().url}>
+                                    <Archive className="mr-2 size-4" />
+                                    View archived
+                                    {inactiveCount > 0
+                                        ? ` (${inactiveCount})`
+                                        : ''}
+                                </Link>
+                            </Button>
+                            <Button
+                                onClick={() => setCreateOpen(true)}
+                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                            >
+                                <Plus className="mr-2 size-4" />
+                                Add School Year
+                            </Button>
+                        </div>
                     }
                 />
 
@@ -206,22 +239,20 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
                                                         >
                                                             <Pencil className="size-3.5" />
                                                         </Button>
-                                                        {schoolYear.is_active &&
-                                                            schoolYear.sections_count ===
-                                                                0 && (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    className="text-red-600 hover:text-red-700"
-                                                                    onClick={() =>
-                                                                        handleDeactivate(
-                                                                            schoolYear,
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    Deactivate
-                                                                </Button>
-                                                            )}
+                                                        {schoolYear.is_active && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="text-red-600 hover:text-red-700"
+                                                                onClick={() =>
+                                                                    handleCloseSchoolYear(
+                                                                        schoolYear,
+                                                                    )
+                                                                }
+                                                            >
+                                                                Close school year
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -292,12 +323,14 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
                                 <input
                                     type="hidden"
                                     name="is_active"
-                                    value="0"
+                                    value={createIsActive ? '1' : '0'}
                                 />
                                 <Checkbox
                                     id="create-is-active"
-                                    name="is_active"
-                                    value="1"
+                                    checked={createIsActive}
+                                    onCheckedChange={(checked) =>
+                                        setCreateIsActive(checked === true)
+                                    }
                                 />
                                 <Label htmlFor="create-is-active">
                                     Set as active school year
@@ -392,14 +425,13 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
                                     <input
                                         type="hidden"
                                         name="is_active"
-                                        value="0"
+                                        value={editIsActive ? '1' : '0'}
                                     />
                                     <Checkbox
                                         id="edit-is-active"
-                                        name="is_active"
-                                        value="1"
-                                        defaultChecked={
-                                            editSchoolYear.is_active
+                                        checked={editIsActive}
+                                        onCheckedChange={(checked) =>
+                                            setEditIsActive(checked === true)
                                         }
                                     />
                                     <Label htmlFor="edit-is-active">

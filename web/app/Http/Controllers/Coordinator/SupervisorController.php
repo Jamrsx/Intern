@@ -28,7 +28,16 @@ class SupervisorController extends Controller
 
     public function index(Request $request): Response
     {
-        $section = $this->coordinatorSectionOrFail($request);
+        $section = $this->coordinatorSection($request);
+
+        if ($section === null) {
+            return Inertia::render('coordinator/supervisors', [
+                'section' => null,
+                'companies' => [],
+                'supervisors' => [],
+            ]);
+        }
+
         $course = $section->course;
 
         $companies = Company::query()
@@ -81,6 +90,7 @@ class SupervisorController extends Controller
             ->all();
 
         return Inertia::render('coordinator/supervisors', [
+            'section' => $this->coordinatorSectionPayload($section),
             'companies' => $companies,
             'supervisors' => $supervisors,
         ]);

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\SuperAdmin\Concerns\SyncsCourseMajors;
 use App\Http\Requests\SuperAdmin\StoreCourseRequest;
 use App\Http\Requests\SuperAdmin\UpdateCourseRequest;
 use App\Models\Course;
@@ -14,12 +15,14 @@ use Inertia\Response;
 
 class CourseController extends Controller
 {
+    use SyncsCourseMajors;
+
     public function index(): Response
     {
         $deanRoleId = Role::query()->where('name', 'dean')->value('id');
 
         $courses = Course::query()
-            ->with('dean:id,name,email')
+            ->with(['dean:id,name,email', 'majors'])
             ->orderBy('code')
             ->get()
             ->map(fn (Course $course) => [
@@ -33,6 +36,12 @@ class CourseController extends Controller
                     'name' => $course->dean->name,
                     'email' => $course->dean->email,
                 ] : null,
+                'majors' => $course->majors->map(fn ($major) => [
+                    'id' => $major->id,
+                    'name' => $major->name,
+                    'code' => $major->code,
+                    'program_head_name' => $major->program_head_name,
+                ])->values()->all(),
                 'created_at' => $course->created_at?->toIso8601String(),
             ]);
 
@@ -61,7 +70,12 @@ class CourseController extends Controller
 
     public function store(StoreCourseRequest $request): RedirectResponse
     {
-        Course::query()->create($request->validated());
+        $data = $request->validated();
+        $majors = $data['majors'] ?? [];
+        unset($data['majors']);
+
+        $course = Course::query()->create($data);
+        $this->syncCourseMajors($course, $majors);
 
         Inertia::flash('toast', [
             'type' => 'success',
@@ -73,7 +87,12 @@ class CourseController extends Controller
 
     public function update(UpdateCourseRequest $request, Course $course): RedirectResponse
     {
-        $course->update($request->validated());
+        $data = $request->validated();
+        $majors = $data['majors'] ?? [];
+        unset($data['majors']);
+
+        $course->update($data);
+        $this->syncCourseMajors($course, $majors);
 
         Inertia::flash('toast', [
             'type' => 'success',

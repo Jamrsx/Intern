@@ -46,6 +46,14 @@ class Course extends Model
     }
 
     /**
+     * @return HasMany<CourseMajor, $this>
+     */
+    public function majors(): HasMany
+    {
+        return $this->hasMany(CourseMajor::class)->orderBy('sort_order')->orderBy('name');
+    }
+
+    /**
      * @return HasMany<Company, $this>
      */
     public function companies(): HasMany

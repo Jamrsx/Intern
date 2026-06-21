@@ -51,6 +51,72 @@ test('super admin can assign dean to course', function () {
         ->toBe($dean->id);
 });
 
+test('super admin can create a course with majors and program heads', function () {
+    $this->actingAs($this->superAdmin)
+        ->post(route('superadmin.courses.store'), [
+            'code' => 'BSBA',
+            'name' => 'Bachelor of Science in Business Administration',
+            'required_hours' => 600,
+            'dean_user_id' => null,
+            'is_active' => true,
+            'majors' => [
+                [
+                    'name' => 'Financial Management',
+                    'code' => 'FM',
+                    'program_head_name' => 'Dr. Jane Doe',
+                ],
+                [
+                    'name' => 'Marketing Management',
+                    'code' => 'MM',
+                    'program_head_name' => 'Dr. John Smith',
+                ],
+            ],
+        ])
+        ->assertRedirect(route('superadmin.courses.index'));
+
+    $course = Course::query()->where('code', 'BSBA')->first();
+
+    expect($course)->not->toBeNull();
+    expect($course->majors)->toHaveCount(2);
+    expect($course->majors->pluck('code')->all())->toBe(['FM', 'MM']);
+    expect($course->majors->firstWhere('code', 'FM')?->program_head_name)
+        ->toBe('Dr. Jane Doe');
+});
+
+test('super admin can update course majors', function () {
+    $course = Course::query()->create([
+        'code' => 'EDUC',
+        'name' => 'Bachelor of Elementary Education',
+        'required_hours' => 500,
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($this->superAdmin)
+        ->put(route('superadmin.courses.update', $course), [
+            'code' => 'EDUC',
+            'name' => 'Bachelor of Elementary Education',
+            'required_hours' => 500,
+            'dean_user_id' => null,
+            'is_active' => true,
+            'majors' => [
+                [
+                    'name' => 'Primary Education',
+                    'code' => null,
+                    'program_head_name' => 'Prof. Ana Reyes',
+                ],
+                [
+                    'name' => 'Secondary Education Major in English',
+                    'code' => null,
+                    'program_head_name' => 'Prof. Mark Lim',
+                ],
+            ],
+        ])
+        ->assertRedirect(route('superadmin.courses.index'));
+
+    expect($course->fresh()->majors)->toHaveCount(2);
+    expect($course->fresh()->majors->first()?->name)->toBe('Primary Education');
+});
+
 test('super admin can deactivate a course', function () {
     $course = Course::query()->create([
         'code' => 'BSCS',

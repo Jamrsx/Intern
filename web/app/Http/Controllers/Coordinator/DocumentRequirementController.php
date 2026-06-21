@@ -20,29 +20,33 @@ class DocumentRequirementController extends Controller
 
     public function index(Request $request): Response
     {
-        $section = $this->coordinatorSectionOrFail($request);
+        $section = $this->coordinatorSection($request);
 
-        $requirements = DocumentRequirement::query()
-            ->where('section_id', $section->id)
-            ->withCount([
-                'submissions as submitted_count',
-            ])
-            ->orderBy('deadline_at')
-            ->get()
-            ->map(fn (DocumentRequirement $requirement) => $this->requirementPayload(
-                $requirement,
-                $section,
-            ))
-            ->values()
-            ->all();
+        $requirements = $section === null
+            ? []
+            : DocumentRequirement::query()
+                ->where('section_id', $section->id)
+                ->withCount([
+                    'submissions as submitted_count',
+                ])
+                ->orderBy('deadline_at')
+                ->get()
+                ->map(fn (DocumentRequirement $requirement) => $this->requirementPayload(
+                    $requirement,
+                    $section,
+                ))
+                ->values()
+                ->all();
 
         return Inertia::render('coordinator/document-requirements', [
-            'section' => $this->sectionPayload($section),
+            'section' => $this->coordinatorSectionPayload($section),
             'requirements' => $requirements,
-            'student_count' => Student::query()
-                ->where('section_id', $section->id)
-                ->where('is_active', true)
-                ->count(),
+            'student_count' => $section === null
+                ? 0
+                : Student::query()
+                    ->where('section_id', $section->id)
+                    ->where('is_active', true)
+                    ->count(),
         ]);
     }
 
@@ -116,21 +120,6 @@ class DocumentRequirementController extends Controller
         Section $section,
     ): void {
         abort_unless($requirement->section_id === $section->id, 404);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function sectionPayload(Section $section): array
-    {
-        $section->loadMissing('course:id,code,name', 'schoolYear:id,name');
-
-        return [
-            'id' => $section->id,
-            'display_name' => trim(
-                ($section->course?->code ?? '').' '.$section->name
-            ),
-        ];
     }
 
     /**

@@ -154,6 +154,54 @@ it('blocks coordinators from updating students outside their section', function 
         ->assertForbidden();
 });
 
+it('allows coordinators without a section to open portal pages with an empty state', function () {
+    $this->seed(RoleSeeder::class);
+
+    $coordinator = User::factory()->create([
+        'role_id' => Role::query()->where('name', 'coordinator')->value('id'),
+    ]);
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.students.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/students')
+            ->where('section', null)
+            ->has('students', 0));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.evaluation-templates.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/evaluation-templates')
+            ->where('section', null)
+            ->has('templates', 0));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.document-requirements.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/document-requirements')
+            ->where('section', null)
+            ->has('requirements', 0));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.companies.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/companies')
+            ->where('section', null)
+            ->has('companies', 0));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.supervisors.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/supervisors')
+            ->where('section', null)
+            ->has('supervisors', 0));
+});
+
 it('blocks non-coordinators from coordinator routes', function () {
     $this->seed(RoleSeeder::class);
 

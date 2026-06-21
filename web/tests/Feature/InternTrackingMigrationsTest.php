@@ -6,6 +6,7 @@ it('creates intern tracking tables', function () {
     $tables = [
         'roles',
         'courses',
+        'course_majors',
         'sections',
         'companies',
         'departments',

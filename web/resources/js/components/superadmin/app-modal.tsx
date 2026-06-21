@@ -30,18 +30,27 @@ export function AppModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className={cn('sm:max-w-lg', className)}
+                className={cn(
+                    'flex max-h-[90vh] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg',
+                    className,
+                )}
                 showCloseButton
                 overlayClassName="bg-clear bg-opacity-20 backdrop-blur-sm"
             >
-                <DialogHeader>
+                <DialogHeader className="shrink-0 border-b px-6 py-4">
                     <DialogTitle>{title}</DialogTitle>
                     {description && (
                         <DialogDescription>{description}</DialogDescription>
                     )}
                 </DialogHeader>
-                {children}
-                {footer && <DialogFooter>{footer}</DialogFooter>}
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                    {children}
+                </div>
+                {footer ? (
+                    <DialogFooter className="shrink-0 border-t px-6 py-4">
+                        {footer}
+                    </DialogFooter>
+                ) : null}
             </DialogContent>
         </Dialog>
     );

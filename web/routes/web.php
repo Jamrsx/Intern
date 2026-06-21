@@ -2,8 +2,8 @@
 
 use App\Http\Controllers\Coordinator\CompanyController as CoordinatorCompanyController;
 use App\Http\Controllers\Coordinator\DashboardController as CoordinatorDashboardController;
-use App\Http\Controllers\Coordinator\EvaluationAlertController as CoordinatorEvaluationAlertController;
 use App\Http\Controllers\Coordinator\DocumentRequirementController as CoordinatorDocumentRequirementController;
+use App\Http\Controllers\Coordinator\EvaluationAlertController as CoordinatorEvaluationAlertController;
 use App\Http\Controllers\Coordinator\EvaluationTemplateController as CoordinatorEvaluationTemplateController;
 use App\Http\Controllers\Coordinator\OjtEvaluationController as CoordinatorOjtEvaluationController;
 use App\Http\Controllers\Coordinator\StudentController as CoordinatorStudentController;
@@ -16,8 +16,8 @@ use App\Http\Controllers\Dean\StudentController as DeanStudentController;
 use App\Http\Controllers\SuperAdmin\CourseController as SuperAdminCourseController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\DeanController as SuperAdminDeanController;
-use App\Http\Controllers\Supervisor\EvaluationAlertController as SupervisorEvaluationAlertController;
 use App\Http\Controllers\Supervisor\DashboardController as SupervisorDashboardController;
+use App\Http\Controllers\Supervisor\EvaluationAlertController as SupervisorEvaluationAlertController;
 use App\Http\Controllers\Supervisor\OjtEvaluationController as SupervisorOjtEvaluationController;
 use Illuminate\Support\Facades\Route;
 
@@ -67,6 +67,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function () {
             Route::get('dashboard', [DeanDashboardController::class, 'index'])
                 ->name('dashboard');
+
+            Route::get('school-years/archive', [DeanSchoolYearController::class, 'archive'])
+                ->name('school-years.archive');
 
             Route::resource('school-years', DeanSchoolYearController::class)
                 ->except(['show', 'create', 'edit']);
