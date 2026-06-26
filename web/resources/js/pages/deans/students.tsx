@@ -319,12 +319,42 @@ function SectionSelect({
     value,
     onChange,
     name = 'section_id',
+    disabled = false,
 }: {
     sections: SectionOption[];
     value: string;
     onChange: (value: string) => void;
     name?: string;
+    disabled?: boolean;
 }) {
+    const selectedSection = sections.find(
+        (section) => String(section.id) === value,
+    );
+    const selectedLabel = selectedSection
+        ? `${selectedSection.display_name}${
+              selectedSection.school_year
+                  ? ` (${selectedSection.school_year})`
+                  : ''
+          }`
+        : '';
+
+    if (disabled) {
+        return (
+            <>
+                <input type="hidden" name={name} value={value} />
+                <Input
+                    readOnly
+                    disabled
+                    value={selectedLabel}
+                    className="bg-muted"
+                />
+                <p className="text-xs text-muted-foreground">
+                    Section is locked because you started from this section group.
+                </p>
+            </>
+        );
+    }
+
     return (
         <>
             <input type="hidden" name={name} value={value} />
@@ -358,6 +388,7 @@ export default function DeanStudents({
     const [bulkOpen, setBulkOpen] = useState(false);
     const [editStudent, setEditStudent] = useState<StudentRow | null>(null);
     const [createSectionId, setCreateSectionId] = useState('');
+    const [createSectionLocked, setCreateSectionLocked] = useState(false);
     const [editSectionId, setEditSectionId] = useState('');
     const [editCompanyId, setEditCompanyId] = useState('none');
     const [editDepartmentId, setEditDepartmentId] = useState('none');
@@ -404,6 +435,42 @@ export default function DeanStudents({
         resetBulkImport();
         setBulkOpen(true);
     };
+
+    const openCreateStudentModal = (sectionId?: number) => {
+        if (sectionId !== undefined) {
+            setCreateSectionId(String(sectionId));
+            setCreateSectionLocked(true);
+        } else {
+            setCreateSectionId(String(sections[0]?.id ?? ''));
+            setCreateSectionLocked(false);
+        }
+
+        setCreateOpen(true);
+
+        console.log('Dean open create student modal', {
+            sectionId: sectionId ?? null,
+            locked: sectionId !== undefined,
+        });
+    };
+
+    const handleCreateModalChange = (open: boolean) => {
+        setCreateOpen(open);
+
+        if (!open) {
+            setCreateSectionLocked(false);
+        }
+    };
+
+    const lockedCreateSection = useMemo(() => {
+        if (!createSectionLocked || createSectionId === '') {
+            return null;
+        }
+
+        return (
+            sections.find((section) => String(section.id) === createSectionId) ??
+            null
+        );
+    }, [createSectionId, createSectionLocked, sections]);
 
     const handleDownloadTemplate = () => {
         if (!course) {
@@ -468,8 +535,10 @@ export default function DeanStudents({
             bySection.set(student.section_id, existing);
         }
 
+        const hasSearch = searchQuery.trim() !== '';
+
         return sections
-            .filter((section) => bySection.has(section.id))
+            .filter((section) => !hasSearch || bySection.has(section.id))
             .map((section) => ({
                 sectionId: section.id,
                 displayName: section.display_name,
@@ -477,7 +546,7 @@ export default function DeanStudents({
                 coordinator: section.coordinator,
                 students: bySection.get(section.id) ?? [],
             }));
-    }, [filteredStudents, sections]);
+    }, [filteredStudents, sections, searchQuery]);
 
     const filteredGroups = useMemo(() => {
         if (filterSectionId === 'all') {
@@ -488,14 +557,6 @@ export default function DeanStudents({
             (group) => String(group.sectionId) === filterSectionId,
         );
     }, [filterSectionId, studentGroups]);
-
-    const sectionsWithStudents = useMemo(
-        () =>
-            sections.filter((section) =>
-                students.some((student) => student.section_id === section.id),
-            ),
-        [sections, students],
-    );
 
     const isGroupOpen = (group: StudentGroup) => {
         if (searchQuery.trim() !== '') {
@@ -677,12 +738,7 @@ export default function DeanStudents({
                                     Bulk Add
                                 </Button>
                                 <Button
-                                    onClick={() => {
-                                        setCreateSectionId(
-                                            String(sections[0]?.id ?? ''),
-                                        );
-                                        setCreateOpen(true);
-                                    }}
+                                    onClick={() => openCreateStudentModal()}
                                     className="bg-brand text-brand-foreground hover:bg-brand-hover"
                                 >
                                     <Plus className="mr-2 size-4" />
@@ -716,23 +772,7 @@ export default function DeanStudents({
                     </Card>
                 )}
 
-                {course && sections.length > 0 && students.length === 0 && (
-                    <Card className="border-sidebar-border/70">
-                        <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                            No students yet. Use{' '}
-                            <span className="font-medium text-foreground">
-                                Add Student
-                            </span>{' '}
-                            or{' '}
-                            <span className="font-medium text-foreground">
-                                Bulk Add
-                            </span>{' '}
-                            to create accounts and assign them to a section.
-                        </CardContent>
-                    </Card>
-                )}
-
-                {course && sections.length > 0 && students.length > 0 && (
+                {course && sections.length > 0 && (
                     <div className="space-y-4">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                             <div className="flex-1 space-y-2">
@@ -777,7 +817,7 @@ export default function DeanStudents({
                                         <SelectItem value="all">
                                             All sections
                                         </SelectItem>
-                                        {sectionsWithStudents.map((section) => (
+                                        {sections.map((section) => (
                                             <SelectItem
                                                 key={section.id}
                                                 value={String(section.id)}
@@ -792,7 +832,8 @@ export default function DeanStudents({
 
                         <p className="text-sm text-muted-foreground">
                             Students grouped by section. Expand a section to
-                            view or manage its interns.
+                            view or manage its interns. Empty sections are
+                            shown so you can add students directly.
                             {searchQuery.trim() !== '' && (
                                 <>
                                     {' '}
@@ -821,12 +862,13 @@ export default function DeanStudents({
                                     }
                                 >
                                     <Card className="overflow-hidden border-sidebar-border/70 py-0">
-                                        <CollapsibleTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-muted/40"
-                                            >
-                                                <div>
+                                        <div className="flex items-center justify-between gap-3 px-4 py-4">
+                                            <CollapsibleTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left transition-colors hover:bg-muted/40"
+                                                >
+                                                    <div className="min-w-0">
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         <h3 className="font-semibold">
                                                             {group.displayName}
@@ -836,11 +878,25 @@ export default function DeanStudents({
                                                                 {group.schoolYear}
                                                             </Badge>
                                                         )}
-                                                        <Badge className="bg-brand text-brand-foreground hover:bg-brand">
-                                                            {group.students.length}{' '}
-                                                            {group.students.length === 1
-                                                                ? 'student'
-                                                                : 'students'}
+                                                        <Badge
+                                                            variant={
+                                                                group.students.length === 0
+                                                                    ? 'secondary'
+                                                                    : 'default'
+                                                            }
+                                                            className={
+                                                                group.students.length === 0
+                                                                    ? ''
+                                                                    : 'bg-brand text-brand-foreground hover:bg-brand'
+                                                            }
+                                                        >
+                                                            {group.students.length === 0
+                                                                ? 'Empty section'
+                                                                : `${group.students.length} ${
+                                                                      group.students.length === 1
+                                                                          ? 'student'
+                                                                          : 'students'
+                                                                  }`}
                                                         </Badge>
                                                     </div>
                                                     <p className="mt-1 text-sm text-muted-foreground">
@@ -869,30 +925,66 @@ export default function DeanStudents({
                                                             </span>
                                                         )}
                                                     </p>
-                                                </div>
-                                                <ChevronDown
-                                                    className={cn(
-                                                        'size-5 shrink-0 text-muted-foreground transition-transform',
-                                                        isGroupOpen(group) &&
-                                                            'rotate-180',
-                                                    )}
-                                                />
-                                            </button>
-                                        </CollapsibleTrigger>
+                                                    </div>
+                                                    <ChevronDown
+                                                        className={cn(
+                                                            'size-5 shrink-0 text-muted-foreground transition-transform',
+                                                            isGroupOpen(group) &&
+                                                                'rotate-180',
+                                                        )}
+                                                    />
+                                                </button>
+                                            </CollapsibleTrigger>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                className="shrink-0"
+                                                onClick={() =>
+                                                    openCreateStudentModal(
+                                                        group.sectionId,
+                                                    )
+                                                }
+                                            >
+                                                <Plus className="mr-1 size-3.5" />
+                                                Add Student
+                                            </Button>
+                                        </div>
 
                                         <CollapsibleContent>
                                             <div className="border-t">
-                                                <StudentGroupTable
-                                                    students={group.students}
-                                                    onEdit={openEditModal}
-                                                    onDeactivate={
-                                                        handleDeactivate
-                                                    }
-                                                    onMail={handleMailStudent}
-                                                    mailingStudentId={
-                                                        mailingStudentId
-                                                    }
-                                                />
+                                                {group.students.length === 0 ? (
+                                                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                                                        No students in this section yet.
+                                                        <div className="mt-4">
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                                                                onClick={() =>
+                                                                    openCreateStudentModal(
+                                                                        group.sectionId,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Plus className="mr-1 size-3.5" />
+                                                                Add Student
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <StudentGroupTable
+                                                        students={group.students}
+                                                        onEdit={openEditModal}
+                                                        onDeactivate={
+                                                            handleDeactivate
+                                                        }
+                                                        onMail={handleMailStudent}
+                                                        mailingStudentId={
+                                                            mailingStudentId
+                                                        }
+                                                    />
+                                                )}
                                             </div>
                                         </CollapsibleContent>
                                     </Card>
@@ -906,14 +998,18 @@ export default function DeanStudents({
             {course && (
                 <AppModal
                     open={createOpen}
-                    onOpenChange={setCreateOpen}
+                    onOpenChange={handleCreateModalChange}
                     title="Add Student"
-                    description="Create a single intern account and assign a section."
+                    description={
+                        lockedCreateSection
+                            ? `Create a student account and assign them to ${lockedCreateSection.display_name}.`
+                            : 'Create a single intern account and assign a section.'
+                    }
                 >
                     <Form
                         action={storeRoute.url}
                         method={storeRoute.method}
-                        onSuccess={() => setCreateOpen(false)}
+                        onSuccess={() => handleCreateModalChange(false)}
                         className="space-y-4"
                     >
                         {({ processing, errors }) => (
@@ -989,6 +1085,7 @@ export default function DeanStudents({
                                         sections={sections}
                                         value={createSectionId}
                                         onChange={setCreateSectionId}
+                                        disabled={createSectionLocked}
                                     />
                                     <InputError message={errors.section_id} />
                                 </div>
@@ -996,7 +1093,7 @@ export default function DeanStudents({
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => setCreateOpen(false)}
+                                        onClick={() => handleCreateModalChange(false)}
                                     >
                                         Cancel
                                     </Button>
