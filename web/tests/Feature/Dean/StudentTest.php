@@ -2,6 +2,7 @@
 
 use App\Mail\StudentAccountCredentialsMail;
 use App\Models\Course;
+use App\Models\CourseMajor;
 use App\Models\Role;
 use App\Models\SchoolYear;
 use App\Models\Section;
@@ -93,6 +94,84 @@ it('allows a dean to create and update students', function () {
         ->assertRedirect(route('deans.students.index'));
 
     expect($student->fresh()?->user?->email)->toBe('john.updated@gmail.com');
+});
+
+it('creates missing sections during bulk student import', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    $programHeadRoleId = Role::query()->where('name', 'program_head')->value('id');
+    $schoolYear = SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
+
+    $programHead = User::factory()->create(['role_id' => $programHeadRoleId]);
+
+    $course = Course::query()->create([
+        'code' => 'BSBA',
+        'name' => 'Bachelor of Science in Business Administration',
+        'required_hours' => 600,
+        'is_active' => true,
+    ]);
+
+    $major = CourseMajor::query()->create([
+        'course_id' => $course->id,
+        'name' => 'Financial Management',
+        'code' => 'FM',
+        'sort_order' => 0,
+        'program_head_user_id' => $programHead->id,
+    ]);
+
+    $existingSection = Section::query()->create([
+        'course_id' => $course->id,
+        'course_major_id' => $major->id,
+        'school_year_id' => $schoolYear->id,
+        'name' => '4A-FM',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($programHead)
+        ->post(route('deans.students.bulk-store'), [
+            'students' => [
+                [
+                    'student_number' => '2022-1-10002',
+                    'email' => 'st2@gmail.com',
+                    'first_name' => 'Two',
+                    'middle_name' => '',
+                    'last_name' => 'Student',
+                    'section_id' => $existingSection->id,
+                ],
+                [
+                    'student_number' => '2022-1-10004',
+                    'email' => 'st4@gmail.com',
+                    'first_name' => 'Four',
+                    'middle_name' => '',
+                    'last_name' => 'Student',
+                    'section_label' => '4C-FM',
+                ],
+                [
+                    'student_number' => '2022-1-10005',
+                    'email' => 'st5@gmail.com',
+                    'first_name' => 'Five',
+                    'middle_name' => '',
+                    'last_name' => 'Student',
+                    'section_label' => '4D-FM',
+                ],
+            ],
+        ])
+        ->assertRedirect(route('deans.students.index'));
+
+    expect(Section::query()->where('name', '4C-FM')->exists())->toBeTrue();
+    expect(Section::query()->where('name', '4D-FM')->exists())->toBeTrue();
+    expect(Student::query()->count())->toBe(3);
+
+    $newSection = Section::query()->where('name', '4C-FM')->first();
+    expect($newSection?->course_major_id)->toBe($major->id);
+    expect($newSection?->school_year_id)->toBe($schoolYear->id);
+
+    expect(
+        Student::query()
+            ->where('student_number', '2022-1-10004')
+            ->value('section_id'),
+    )->toBe($newSection?->id);
 });
 
 it('includes section and coordinator details on the students page', function () {

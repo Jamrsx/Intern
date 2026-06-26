@@ -10,7 +10,9 @@ use App\Http\Requests\Dean\UpdateStudentRequest;
 use App\Mail\StudentAccountCredentialsMail;
 use App\Models\Company;
 use App\Models\Course;
+use App\Models\CourseMajor;
 use App\Models\Role;
+use App\Models\SchoolYear;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\Supervisor;
@@ -64,25 +66,57 @@ class StudentController extends Controller
 
     public function bulkStore(BulkStoreStudentRequest $request): RedirectResponse
     {
-        $this->deanCourseOrFail($request);
+        $course = $this->deanCourseOrFail($request);
         $validated = $request->validated();
         $createdCount = 0;
+        $createdSectionNames = [];
 
-        DB::transaction(function () use ($validated, &$createdCount) {
+        DB::transaction(function () use ($request, $course, $validated, &$createdCount, &$createdSectionNames) {
+            $sectionIdCache = [];
+
             foreach ($validated['students'] as $studentData) {
+                $sectionLabel = $studentData['section_label'] ?? null;
+                $requestedSectionId = $studentData['section_id'] ?? $validated['section_id'] ?? null;
+                $cacheKey = $requestedSectionId !== null
+                    ? 'id:'.$requestedSectionId
+                    : 'label:'.strtolower(trim((string) $sectionLabel));
+
+                if (! isset($sectionIdCache[$cacheKey])) {
+                    [$resolvedSectionId, $wasCreated] = $this->resolveOrCreateSectionId(
+                        $request,
+                        $course,
+                        $requestedSectionId !== null ? (int) $requestedSectionId : null,
+                        $sectionLabel,
+                    );
+
+                    $sectionIdCache[$cacheKey] = $resolvedSectionId;
+
+                    if ($wasCreated && $sectionLabel !== null) {
+                        $createdSectionNames[strtolower(trim($sectionLabel))] = trim($sectionLabel);
+                    }
+                }
+
                 $this->createStudent([
                     ...$studentData,
                     'email' => $studentData['email'] ?? $this->generatedBulkEmail($studentData['student_number']),
-                    'section_id' => $studentData['section_id'] ?? $validated['section_id'],
+                    'section_id' => $sectionIdCache[$cacheKey],
                 ]);
 
                 $createdCount++;
             }
         });
 
+        $createdSectionCount = count($createdSectionNames);
+
+        $message = "{$createdCount} student account(s) created. Default passwords were generated for each account.";
+
+        if ($createdSectionCount > 0) {
+            $message .= " {$createdSectionCount} new section(s) were created from the import.";
+        }
+
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => "{$createdCount} student account(s) created. Default passwords were generated for each account.",
+            'message' => $message,
         ]);
 
         return redirect()->route('deans.students.index');
@@ -299,6 +333,89 @@ class StudentController extends Controller
         $local = Str::lower((string) preg_replace('/[^a-zA-Z0-9.-]/', '', $studentNumber));
 
         return "{$local}@students.occ.edu.ph";
+    }
+
+    /**
+     * @return array{0: int, 1: bool}
+     */
+    private function resolveOrCreateSectionId(
+        Request $request,
+        Course $course,
+        ?int $sectionId,
+        ?string $sectionLabel,
+    ): array {
+        if ($sectionId !== null) {
+            $section = Section::query()->find($sectionId);
+
+            abort_unless(
+                $section !== null
+                    && DeanPortalScope::sectionBelongsToScope($request->user(), $section),
+                422,
+                'One or more rows use a section outside your scope.',
+            );
+
+            return [$sectionId, false];
+        }
+
+        abort_if(blank($sectionLabel), 422, 'Each imported student must have a section.');
+
+        $sectionName = $this->normalizeSectionNameFromLabel($sectionLabel, $course->code);
+
+        $existingSection = $this->deanSectionsQuery($request)
+            ->where('name', $sectionName)
+            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
+            ->first();
+
+        if ($existingSection !== null) {
+            return [$existingSection->id, false];
+        }
+
+        $schoolYear = SchoolYear::query()->where('is_active', true)->first();
+
+        abort_if(
+            $schoolYear === null,
+            422,
+            'No active school year found. Set an active school year before importing students.',
+        );
+
+        $majorId = $this->resolveSectionMajorId($request, null)
+            ?? $this->inferMajorIdFromSectionName($course, $sectionName);
+
+        $section = Section::query()->create([
+            'course_id' => $course->id,
+            'course_major_id' => $majorId,
+            'school_year_id' => $schoolYear->id,
+            'name' => $sectionName,
+            'is_active' => true,
+        ]);
+
+        return [$section->id, true];
+    }
+
+    private function normalizeSectionNameFromLabel(string $label, string $courseCode): string
+    {
+        $trimmed = trim($label);
+        $coursePrefix = $courseCode.' ';
+
+        if (str_starts_with(strtolower($trimmed), strtolower($coursePrefix))) {
+            return trim(substr($trimmed, strlen($coursePrefix)));
+        }
+
+        return $trimmed;
+    }
+
+    private function inferMajorIdFromSectionName(Course $course, string $sectionName): ?int
+    {
+        if (! preg_match('/-([A-Za-z]+)$/', $sectionName, $matches)) {
+            return null;
+        }
+
+        $majorCode = strtoupper($matches[1]);
+
+        return CourseMajor::query()
+            ->where('course_id', $course->id)
+            ->where('code', $majorCode)
+            ->value('id');
     }
 
     private function sendStudentCredentials(Student $student): void

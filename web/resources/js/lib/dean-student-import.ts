@@ -14,6 +14,7 @@ export type BulkImportRow = {
     last_name: string;
     section_id: string;
     section_label: string;
+    will_create_section: boolean;
     errors: string[];
 };
 
@@ -86,19 +87,34 @@ function autoGenerateEmail(studentNumber: string): string {
 function resolveSectionId(
     sectionLabel: string,
     sections: SectionLookup[],
-): { sectionId: string; error: string | null } {
-    const normalized = sectionLabel.trim().toLowerCase();
+): {
+    sectionId: string;
+    error: string | null;
+    willCreateSection: boolean;
+} {
+    const trimmed = sectionLabel.trim();
+    const normalized = trimmed.toLowerCase();
 
     if (normalized === '') {
-        return { sectionId: '', error: 'Section is required.' };
+        return {
+            sectionId: '',
+            error: 'Section is required.',
+            willCreateSection: false,
+        };
     }
 
     const exactMatch = sections.find(
-        (section) => section.name.toLowerCase() === normalized,
+        (section) =>
+            section.name.toLowerCase() === normalized ||
+            section.display_name.toLowerCase() === normalized,
     );
 
     if (exactMatch) {
-        return { sectionId: String(exactMatch.id), error: null };
+        return {
+            sectionId: String(exactMatch.id),
+            error: null,
+            willCreateSection: false,
+        };
     }
 
     const displayMatch = sections.find((section) =>
@@ -106,14 +122,17 @@ function resolveSectionId(
     );
 
     if (displayMatch) {
-        return { sectionId: String(displayMatch.id), error: null };
+        return {
+            sectionId: String(displayMatch.id),
+            error: null,
+            willCreateSection: false,
+        };
     }
-
-    const available = sections.map((section) => section.name).join(', ');
 
     return {
         sectionId: '',
-        error: `Section "${sectionLabel}" was not found. Use codes like ${available}.`,
+        error: null,
+        willCreateSection: true,
     };
 }
 
@@ -355,7 +374,8 @@ export function parseStudentImportFile(
                         middle_name: values.middle_name,
                         last_name: values.last_name,
                         section_id: sectionResult.sectionId,
-                        section_label: values.section_label,
+                        section_label: values.section_label.trim(),
+                        will_create_section: sectionResult.willCreateSection,
                         errors,
                     });
                 });

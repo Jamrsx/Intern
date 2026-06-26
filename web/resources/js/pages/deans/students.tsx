@@ -1125,7 +1125,7 @@ export default function DeanStudents({
                         }
                     }}
                     title="Bulk Add Students"
-                    description="Import students from an Excel file using the provided template."
+                    description="Import students from Excel. Missing sections like 4C-FM will be created automatically in the active school year."
                     className="sm:max-w-4xl"
                 >
                     <Form
@@ -1146,7 +1146,9 @@ export default function DeanStudents({
                                     <p className="mt-1">
                                         Row 1 is the header row. Enter each
                                         student starting from row 2 (one student
-                                        per row).
+                                        per row). If a section code does not
+                                        exist yet, it will be created during
+                                        import.
                                     </p>
                                     <div className="mt-3 overflow-x-auto rounded-md border bg-background">
                                         <table className="w-full min-w-[640px] text-left text-xs">
@@ -1359,13 +1361,23 @@ export default function DeanStudents({
                                                                     />
                                                                 </td>
                                                                 <td className="px-3 py-2 align-top">
-                                                                    <input
-                                                                        type="hidden"
-                                                                        name={`students[${index}][section_id]`}
-                                                                        value={
-                                                                            row.section_id
-                                                                        }
-                                                                    />
+                                                                    {row.section_id ? (
+                                                                        <input
+                                                                            type="hidden"
+                                                                            name={`students[${index}][section_id]`}
+                                                                            value={
+                                                                                row.section_id
+                                                                            }
+                                                                        />
+                                                                    ) : (
+                                                                        <input
+                                                                            type="hidden"
+                                                                            name={`students[${index}][section_label]`}
+                                                                            value={
+                                                                                row.section_label
+                                                                            }
+                                                                        />
+                                                                    )}
                                                                     {
                                                                         row.section_label
                                                                     }
@@ -1373,6 +1385,9 @@ export default function DeanStudents({
                                                                         message={
                                                                             errors[
                                                                                 `students.${index}.section_id`
+                                                                            ] ??
+                                                                            errors[
+                                                                                `students.${index}.section_label`
                                                                             ]
                                                                         }
                                                                     />
@@ -1415,6 +1430,12 @@ export default function DeanStudents({
                                                                                 ),
                                                                             )}
                                                                         </div>
+                                                                    ) : row.will_create_section ? (
+                                                                        <span className="text-xs text-blue-600">
+                                                                            Will
+                                                                            create
+                                                                            section
+                                                                        </span>
                                                                     ) : (
                                                                         <span className="text-xs text-emerald-600">
                                                                             Ready

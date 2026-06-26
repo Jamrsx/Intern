@@ -30,11 +30,11 @@ class BulkStoreStudentRequest extends FormRequest
             'section_id' => ['nullable', 'integer', Rule::in($scopedSectionIds->all())],
             'students' => ['required', 'array', 'min:1', 'max:100'],
             'students.*.section_id' => [
-                'required_without:section_id',
                 'nullable',
                 'integer',
                 Rule::in($scopedSectionIds->all()),
             ],
+            'students.*.section_label' => ['nullable', 'string', 'max:50'],
             'students.*.email' => ['nullable', 'string', 'email', 'max:255', 'distinct', 'unique:users,email'],
             'students.*.student_number' => [
                 'required',
@@ -64,5 +64,25 @@ class BulkStoreStudentRequest extends FormRequest
             'section_id.in' => 'Please select an active section in your scope.',
             'students.*.section_id.in' => 'One or more rows use a section outside your scope.',
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            $students = $this->input('students', []);
+            $fallbackSectionId = $this->input('section_id');
+
+            foreach ($students as $index => $student) {
+                $hasSectionId = ! empty($student['section_id']) || ! empty($fallbackSectionId);
+                $hasSectionLabel = ! empty($student['section_label']);
+
+                if (! $hasSectionId && ! $hasSectionLabel) {
+                    $validator->errors()->add(
+                        "students.{$index}.section_id",
+                        'Each imported student must have a section.',
+                    );
+                }
+            }
+        });
     }
 }
