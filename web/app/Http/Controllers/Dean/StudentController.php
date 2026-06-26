@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dean;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\BulkStoreStudentRequest;
 use App\Http\Requests\Dean\StoreStudentRequest;
 use App\Http\Requests\Dean\UpdateStudentRequest;
@@ -14,6 +15,7 @@ use App\Models\Section;
 use App\Models\Student;
 use App\Models\Supervisor;
 use App\Models\User;
+use App\Support\DeanPortalScope;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,21 +26,19 @@ use Inertia\Response;
 
 class StudentController extends Controller
 {
+    use ResolvesDeanScope;
+
     public function index(Request $request): Response
     {
         $course = $this->deanCourse($request);
 
-        $sections = $this->availableSections($course);
-        $students = $this->studentList($course);
+        $sections = $this->availableSections($course, $request);
+        $students = $this->studentList($course, $request);
         $companies = $this->companyOptions($course);
         $supervisors = $this->supervisorOptions($course);
 
         return Inertia::render('deans/students', [
-            'course' => $course ? [
-                'id' => $course->id,
-                'code' => $course->code,
-                'name' => $course->name,
-            ] : null,
+            'course' => $this->deanPortalContextPayload($request),
             'sections' => $sections,
             'students' => $students,
             'companies' => $companies,
@@ -138,8 +138,13 @@ class StudentController extends Controller
 
     public function mailCredentials(Request $request, Student $student): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
-        abort_unless($student->section?->course_id === $course->id, 404);
+        $this->deanCourseOrFail($request);
+        $student->loadMissing('section');
+        abort_unless(
+            $student->section !== null
+                && DeanPortalScope::sectionBelongsToScope($request->user(), $student->section),
+            404,
+        );
         abort_unless($student->is_active && $student->user->is_active, 422);
 
         try {
@@ -165,16 +170,19 @@ class StudentController extends Controller
 
     public function mailAllCredentials(Request $request): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
+        $this->deanCourseOrFail($request);
 
-        $students = Student::query()
-            ->with('user')
-            ->where('is_active', true)
-            ->whereHas('user', fn ($query) => $query->where('is_active', true))
-            ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
-            ->orderBy('last_name')
-            ->orderBy('first_name')
-            ->get();
+        $user = $request->user();
+
+        $students = $user
+            ? DeanPortalScope::studentsQuery($user)
+                ->with('user')
+                ->where('is_active', true)
+                ->whereHas('user', fn ($query) => $query->where('is_active', true))
+                ->orderBy('last_name')
+                ->orderBy('first_name')
+                ->get()
+            : collect();
 
         if ($students->isEmpty()) {
             Inertia::flash('toast', [
@@ -223,8 +231,13 @@ class StudentController extends Controller
 
     public function destroy(Request $request, Student $student): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
-        abort_unless($student->section?->course_id === $course->id, 404);
+        $this->deanCourseOrFail($request);
+        $student->loadMissing('section');
+        abort_unless(
+            $student->section !== null
+                && DeanPortalScope::sectionBelongsToScope($request->user(), $student->section),
+            404,
+        );
 
         DB::transaction(function () use ($student) {
             $student->update(['is_active' => false]);
@@ -307,37 +320,20 @@ class StudentController extends Controller
         );
     }
 
-    private function deanCourse(Request $request): ?Course
-    {
-        return Course::query()
-            ->where('dean_user_id', $request->user()->id)
-            ->first();
-    }
-
-    private function deanCourseOrFail(Request $request): Course
-    {
-        $course = $this->deanCourse($request);
-
-        abort_if($course === null, 403, 'You are not assigned to a course yet.');
-
-        return $course;
-    }
-
     /**
      * @return list<array<string, mixed>>
      */
-    private function availableSections(?Course $course): array
+    private function availableSections(?Course $course, ?Request $request = null): array
     {
-        if ($course === null) {
+        if ($course === null || $request === null) {
             return [];
         }
 
-        return Section::query()
+        return $this->deanSectionsQuery($request)
             ->with([
                 'schoolYear:id,name,is_active',
                 'coordinator:id,name,email',
             ])
-            ->where('course_id', $course->id)
             ->where('is_active', true)
             ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
             ->orderBy('name')
@@ -360,13 +356,13 @@ class StudentController extends Controller
     /**
      * @return list<array<string, mixed>>
      */
-    private function studentList(?Course $course): array
+    private function studentList(?Course $course, ?Request $request = null): array
     {
-        if ($course === null) {
+        if ($course === null || $request === null) {
             return [];
         }
 
-        return Student::query()
+        return DeanPortalScope::studentsQuery($request->user())
             ->with([
                 'user:id,name,email,is_active',
                 'section.schoolYear:id,name',
@@ -375,7 +371,6 @@ class StudentController extends Controller
                 'department:id,name,company_id',
                 'supervisor.user:id,name',
             ])
-            ->whereHas('section', fn ($query) => $query->where('course_id', $course->id))
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get()

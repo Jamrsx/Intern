@@ -2,19 +2,18 @@
 
 namespace App\Http\Requests\Dean;
 
+use App\Concerns\AuthorizesDeanPortal;
 use App\Models\Student;
+use App\Support\DeanPortalScope;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateStudentRequest extends FormRequest
 {
+    use AuthorizesDeanPortal;
+
     public function authorize(): bool
     {
-        if (! ($this->user()?->hasRole('dean') ?? false)) {
-            return false;
-        }
-
-        $courseId = $this->user()?->courseAsDean?->id;
         $student = $this->route('student');
 
         if (! $student instanceof Student) {
@@ -23,8 +22,9 @@ class UpdateStudentRequest extends FormRequest
 
         $student->loadMissing('section');
 
-        return $courseId !== null
-            && $student->section?->course_id === $courseId;
+        return $this->authorizedForDeanPortal()
+            && $student->section !== null
+            && DeanPortalScope::sectionBelongsToScope($this->user(), $student->section);
     }
 
     /**
@@ -32,7 +32,11 @@ class UpdateStudentRequest extends FormRequest
      */
     public function rules(): array
     {
-        $courseId = $this->user()?->courseAsDean?->id;
+        $courseId = $this->user()?->deanPortalCourse()?->id;
+        $scopedSectionIds = DeanPortalScope::sectionsQuery($this->user())
+            ->where('is_active', true)
+            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
+            ->pluck('id');
 
         /** @var Student $student */
         $student = $this->route('student');
@@ -55,19 +59,7 @@ class UpdateStudentRequest extends FormRequest
             'first_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
-            'section_id' => [
-                'required',
-                'integer',
-                Rule::exists('sections', 'id')->where(function ($query) use ($courseId) {
-                    $query->where('course_id', $courseId)
-                        ->where('is_active', true)
-                        ->whereIn('school_year_id', function ($subQuery) {
-                            $subQuery->select('id')
-                                ->from('school_years')
-                                ->where('is_active', true);
-                        });
-                }),
-            ],
+            'section_id' => ['required', 'integer', Rule::in($scopedSectionIds->all())],
             'company_id' => [
                 'nullable',
                 'integer',
@@ -117,6 +109,7 @@ class UpdateStudentRequest extends FormRequest
         return [
             'student_number.regex' => 'Student ID must follow the format YYYY-N-##### (e.g. 2022-0-00000).',
             'student_number.unique' => 'This student ID is already registered.',
+            'section_id.in' => 'Please select an active section in your scope.',
         ];
     }
 }

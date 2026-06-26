@@ -53,7 +53,7 @@ class ProfileController extends Controller
             return to_route('superadmin.profile.edit');
         }
 
-        if ($user?->hasRole('dean')) {
+        if ($user?->isDeanPortalUser()) {
             return to_route('deans.settings.profile.edit');
         }
 

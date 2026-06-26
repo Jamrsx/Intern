@@ -35,14 +35,12 @@ type CourseMajor = {
     id?: number;
     name: string;
     code: string | null;
-    program_head_name: string | null;
 };
 
 type MajorFormRow = {
     key: string;
     name: string;
     code: string;
-    program_head_name: string;
 };
 
 type CourseDean = {
@@ -85,7 +83,6 @@ function createMajorRow(
         key: `major-${major?.id ?? Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: major?.name ?? '',
         code: major?.code ?? '',
-        program_head_name: major?.program_head_name ?? '',
     };
 }
 
@@ -142,9 +139,8 @@ function CourseMajorsEditor({
             <div className="space-y-1">
                 <Label className="text-base">Programs under this course</Label>
                 <p className="text-xs text-muted-foreground">
-                    Example: BSBA can have programs FM and MM. Add each program
-                    below and optionally type the program head name (for
-                    reference only — no login is created).
+                    Example: BSBA can have programs FM and MM. Program heads are
+                    assigned on the Deans page after the course is saved.
                 </p>
             </div>
 
@@ -211,29 +207,6 @@ function CourseMajorsEditor({
                                 message={errors[`majors.${index}.name`]}
                             />
                         </div>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor={`major-program-head-${major.key}`}>
-                            Program head name (optional)
-                        </Label>
-                        <Input
-                            id={`major-program-head-${major.key}`}
-                            name={`majors[${index}][program_head_name]`}
-                            value={major.program_head_name}
-                            onChange={(event) =>
-                                updateMajor(
-                                    index,
-                                    'program_head_name',
-                                    event.target.value,
-                                )
-                            }
-                            placeholder="Dr. Jane Doe"
-                        />
-                        <InputError
-                            message={
-                                errors[`majors.${index}.program_head_name`]
-                            }
-                        />
                     </div>
                 </div>
             ))}
@@ -454,15 +427,6 @@ export default function Courses({
                                                                                 major.name
                                                                             }
                                                                         </span>
-                                                                        {major.program_head_name ? (
-                                                                            <span className="block text-xs text-muted-foreground">
-                                                                                Program
-                                                                                head:{' '}
-                                                                                {
-                                                                                    major.program_head_name
-                                                                                }
-                                                                            </span>
-                                                                        ) : null}
                                                                     </li>
                                                                 ),
                                                             )}

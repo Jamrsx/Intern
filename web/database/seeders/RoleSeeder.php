@@ -13,6 +13,7 @@ class RoleSeeder extends Seeder
     private const ROLES = [
         'super_admin' => 'Super Admin',
         'dean' => 'Dean',
+        'program_head' => 'Program Head',
         'coordinator' => 'Coordinator',
         'supervisor' => 'Supervisor',
         'intern' => 'Intern',

@@ -2,15 +2,18 @@
 
 namespace App\Http\Requests\Dean;
 
+use App\Concerns\AuthorizesDeanPortal;
+use App\Support\DeanPortalScope;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class BulkStoreStudentRequest extends FormRequest
 {
+    use AuthorizesDeanPortal;
+
     public function authorize(): bool
     {
-        return ($this->user()?->hasRole('dean') ?? false)
-            && $this->user()?->courseAsDean !== null;
+        return $this->authorizedForDeanPortal();
     }
 
     /**
@@ -18,36 +21,19 @@ class BulkStoreStudentRequest extends FormRequest
      */
     public function rules(): array
     {
-        $courseId = $this->user()?->courseAsDean?->id;
+        $scopedSectionIds = DeanPortalScope::sectionsQuery($this->user())
+            ->where('is_active', true)
+            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
+            ->pluck('id');
 
         return [
-            'section_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('sections', 'id')->where(function ($query) use ($courseId) {
-                    $query->where('course_id', $courseId)
-                        ->where('is_active', true)
-                        ->whereIn('school_year_id', function ($subQuery) {
-                            $subQuery->select('id')
-                                ->from('school_years')
-                                ->where('is_active', true);
-                        });
-                }),
-            ],
+            'section_id' => ['nullable', 'integer', Rule::in($scopedSectionIds->all())],
             'students' => ['required', 'array', 'min:1', 'max:100'],
             'students.*.section_id' => [
                 'required_without:section_id',
                 'nullable',
                 'integer',
-                Rule::exists('sections', 'id')->where(function ($query) use ($courseId) {
-                    $query->where('course_id', $courseId)
-                        ->where('is_active', true)
-                        ->whereIn('school_year_id', function ($subQuery) {
-                            $subQuery->select('id')
-                                ->from('school_years')
-                                ->where('is_active', true);
-                        });
-                }),
+                Rule::in($scopedSectionIds->all()),
             ],
             'students.*.email' => ['nullable', 'string', 'email', 'max:255', 'distinct', 'unique:users,email'],
             'students.*.student_number' => [
@@ -75,6 +61,8 @@ class BulkStoreStudentRequest extends FormRequest
             'students.*.student_number.distinct' => 'Duplicate student IDs are not allowed in the same bulk upload.',
             'students.*.student_number.unique' => 'One or more student IDs are already registered.',
             'students.*.student_number.regex' => 'Student IDs must follow the format YYYY-N-##### (e.g. 2022-0-00000).',
+            'section_id.in' => 'Please select an active section in your scope.',
+            'students.*.section_id.in' => 'One or more rows use a section outside your scope.',
         ];
     }
 }

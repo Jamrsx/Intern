@@ -34,7 +34,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         if (auth()->user()?->loadMissing('role')->hasRole('super_admin')) {
             return redirect()->route('superadmin.dashboard');
         }
-        if (auth()->user()?->loadMissing('role')->hasRole('dean')) {
+        if (auth()->user()?->loadMissing('role')->hasRole('dean')
+            || auth()->user()?->loadMissing('role')->hasRole('program_head')) {
             return redirect()->route('deans.dashboard');
         }
         if (auth()->user()?->loadMissing('role')->hasRole('coordinator')) {

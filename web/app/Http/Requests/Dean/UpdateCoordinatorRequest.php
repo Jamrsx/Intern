@@ -2,29 +2,27 @@
 
 namespace App\Http\Requests\Dean;
 
+use App\Concerns\AuthorizesDeanPortal;
 use App\Models\Section;
 use App\Models\User;
+use App\Support\DeanPortalScope;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateCoordinatorRequest extends FormRequest
 {
+    use AuthorizesDeanPortal;
+
     public function authorize(): bool
     {
-        if (! ($this->user()?->hasRole('dean') ?? false)) {
-            return false;
-        }
-
-        $courseId = $this->user()?->courseAsDean?->id;
         $coordinator = $this->route('coordinator');
 
-        if ($courseId === null || ! $coordinator instanceof User) {
+        if (! $this->authorizedForDeanPortal() || ! $coordinator instanceof User) {
             return false;
         }
 
         return $coordinator->hasRole('coordinator')
-            && Section::query()
-                ->where('course_id', $courseId)
+            && DeanPortalScope::sectionsQuery($this->user())
                 ->where('coordinator_user_id', $coordinator->id)
                 ->exists();
     }
@@ -34,10 +32,17 @@ class UpdateCoordinatorRequest extends FormRequest
      */
     public function rules(): array
     {
-        $courseId = $this->user()?->courseAsDean?->id;
-
         /** @var User $coordinator */
         $coordinator = $this->route('coordinator');
+
+        $scopedSectionIds = DeanPortalScope::sectionsQuery($this->user())
+            ->where('is_active', true)
+            ->where(function ($query) use ($coordinator) {
+                $query->whereNull('coordinator_user_id')
+                    ->orWhere('coordinator_user_id', $coordinator->id);
+            })
+            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
+            ->pluck('id');
 
         return [
             'name' => ['required', 'string', 'max:150'],
@@ -48,23 +53,7 @@ class UpdateCoordinatorRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'email')->ignore($coordinator->id),
             ],
-            'section_id' => [
-                'required',
-                'integer',
-                Rule::exists('sections', 'id')->where(function ($query) use ($courseId, $coordinator) {
-                    $query->where('course_id', $courseId)
-                        ->where('is_active', true)
-                        ->where(function ($inner) use ($coordinator) {
-                            $inner->whereNull('coordinator_user_id')
-                                ->orWhere('coordinator_user_id', $coordinator->id);
-                        })
-                        ->whereIn('school_year_id', function ($subQuery) {
-                            $subQuery->select('id')
-                                ->from('school_years')
-                                ->where('is_active', true);
-                        });
-                }),
-            ],
+            'section_id' => ['required', 'integer', Rule::in($scopedSectionIds->all())],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }
@@ -76,7 +65,7 @@ class UpdateCoordinatorRequest extends FormRequest
     {
         return [
             'email.unique' => 'This email is already registered.',
-            'section_id.exists' => 'Please select a valid section for this coordinator.',
+            'section_id.in' => 'Please select a valid section for this coordinator.',
         ];
     }
 

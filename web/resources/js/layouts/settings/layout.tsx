@@ -25,7 +25,9 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const { auth } = usePage<{ auth: Auth }>().props;
 
     const isSuperAdmin = auth.user?.role?.name === 'super_admin';
-    const isDean = auth.user?.role?.name === 'dean';
+    const isDeanPortalUser =
+        auth.user?.role?.name === 'dean'
+        || auth.user?.role?.name === 'program_head';
     const isCoordinator = auth.user?.role?.name === 'coordinator';
 
     const sidebarNavItems: NavItem[] = [
@@ -33,7 +35,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
             title: 'Profile',
             href: isSuperAdmin
                 ? editSuperAdminProfile()
-                : isDean
+                : isDeanPortalUser
                     ? editDeanProfile()
                     : isCoordinator
                         ? editCoordinatorProfile()
@@ -44,7 +46,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
             title: 'Security',
             href: isSuperAdmin
                 ? editSuperAdminSecurity()
-                : isDean
+                : isDeanPortalUser
                     ? editDeanSecurity()
                     : isCoordinator
                         ? editCoordinatorSecurity()
@@ -55,7 +57,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
             title: 'Appearance',
             href: isSuperAdmin
                 ? editSuperAdminAppearance()
-                : isDean
+                : isDeanPortalUser
                     ? editDeanAppearance()
                     : isCoordinator
                         ? editCoordinatorAppearance()

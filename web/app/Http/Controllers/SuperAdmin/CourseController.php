@@ -40,7 +40,6 @@ class CourseController extends Controller
                     'id' => $major->id,
                     'name' => $major->name,
                     'code' => $major->code,
-                    'program_head_name' => $major->program_head_name,
                 ])->values()->all(),
                 'created_at' => $course->created_at?->toIso8601String(),
             ]);

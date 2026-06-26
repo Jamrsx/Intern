@@ -17,7 +17,7 @@ class EnsureUserIsDean
     {
         $user = $request->user()?->loadMissing('role');
 
-        if ($user === null || ! $user->hasRole('dean')) {
+        if ($user === null || (! $user->hasRole('dean') && ! $user->hasRole('program_head'))) {
             abort(403, 'You do not have permission to access this page.');
         }
 

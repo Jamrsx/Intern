@@ -13,6 +13,7 @@ class Section extends Model
      */
     protected $fillable = [
         'course_id',
+        'course_major_id',
         'school_year_id',
         'name',
         'code',
@@ -38,6 +39,14 @@ class Section extends Model
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
+    }
+
+    /**
+     * @return BelongsTo<CourseMajor, $this>
+     */
+    public function courseMajor(): BelongsTo
+    {
+        return $this->belongsTo(CourseMajor::class);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\DeanPortalScope;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -35,12 +36,35 @@ class User extends Authenticatable implements OAuthenticatable
         return $this->role?->name === $role;
     }
 
+    public function isDeanPortalUser(): bool
+    {
+        return DeanPortalScope::isPortalUser($this);
+    }
+
+    public function deanPortalCourse(): ?Course
+    {
+        return DeanPortalScope::course($this);
+    }
+
+    public function deanPortalMajor(): ?CourseMajor
+    {
+        return DeanPortalScope::major($this);
+    }
+
     /**
      * @return HasOne<Course, $this>
      */
     public function courseAsDean(): HasOne
     {
         return $this->hasOne(Course::class, 'dean_user_id');
+    }
+
+    /**
+     * @return HasOne<CourseMajor, $this>
+     */
+    public function courseMajorAsProgramHead(): HasOne
+    {
+        return $this->hasOne(CourseMajor::class, 'program_head_user_id');
     }
 
     /**

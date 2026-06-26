@@ -1,6 +1,6 @@
 import { Form, Head, router } from '@inertiajs/react';
 import { Pencil, Plus, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { AppModal } from '@/components/superadmin/app-modal';
@@ -11,45 +11,289 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { destroy, index as deansIndex, store, update } from '@/routes/superadmin/deans';
 
-type DeanCourse = {
+type CourseMajorOption = {
+    id: number;
+    code: string | null;
+    name: string;
+    program_head_user_id: number | null;
+};
+
+type CourseOption = {
+    id: number;
+    code: string;
+    name: string;
+    dean_user_id: number | null;
+    majors: CourseMajorOption[];
+};
+
+type LeaderCourse = {
     id: number;
     code: string;
     name: string;
 };
 
-type Dean = {
+type LeaderMajor = {
+    id: number;
+    code: string | null;
+    name: string;
+    course: LeaderCourse;
+};
+
+type Leader = {
     id: number;
     name: string;
     email: string;
     is_active: boolean;
-    course: DeanCourse | null;
+    role: 'dean' | 'program_head';
+    role_label: string;
+    course: LeaderCourse | null;
+    course_major: LeaderMajor | null;
     created_at: string | null;
 };
 
 type Props = {
-    deans: Dean[];
+    leaders: Leader[];
+    courses: CourseOption[];
 };
 
-export default function Deans({ deans }: Props) {
+type LeaderRole = 'dean' | 'program_head';
+
+function formatMajorLabel(major: CourseMajorOption, course: CourseOption): string {
+    const code = major.code ? `${course.code}-${major.code}` : course.code;
+
+    return `${code} — ${major.name}`;
+}
+
+function formatAssignment(leader: Leader): string {
+    if (leader.role === 'dean' && leader.course) {
+        return `${leader.course.code} — ${leader.course.name}`;
+    }
+
+    if (leader.role === 'program_head' && leader.course_major) {
+        const majorCode = leader.course_major.code
+            ? `${leader.course_major.course.code}-${leader.course_major.code}`
+            : leader.course_major.course.code;
+
+        return `${majorCode} — ${leader.course_major.name}`;
+    }
+
+    return 'Not assigned';
+}
+
+function assignableCourses(
+    courses: CourseOption[],
+    userId?: number,
+): CourseOption[] {
+    return courses.filter(
+        (course) => course.dean_user_id === null || course.dean_user_id === userId,
+    );
+}
+
+function assignableMajors(
+    courses: CourseOption[],
+    userId?: number,
+): Array<CourseMajorOption & { course: CourseOption }> {
+    return courses.flatMap((course) =>
+        course.majors
+            .filter(
+                (major) =>
+                    major.program_head_user_id === null
+                    || major.program_head_user_id === userId,
+            )
+            .map((major) => ({
+                ...major,
+                course,
+            })),
+    );
+}
+
+function RoleAssignmentFields({
+    role,
+    onRoleChange,
+    courseId,
+    onCourseIdChange,
+    majorId,
+    onMajorIdChange,
+    courses,
+    userId,
+    errors,
+}: {
+    role: LeaderRole;
+    onRoleChange: (role: LeaderRole) => void;
+    courseId: string;
+    onCourseIdChange: (value: string) => void;
+    majorId: string;
+    onMajorIdChange: (value: string) => void;
+    courses: CourseOption[];
+    userId?: number;
+    errors: Record<string, string>;
+}) {
+    const availableCourses = useMemo(
+        () => assignableCourses(courses, userId),
+        [courses, userId],
+    );
+
+    const availableMajors = useMemo(
+        () => assignableMajors(courses, userId),
+        [courses, userId],
+    );
+
+    return (
+        <>
+            <div className="grid gap-2">
+                <Label>Role</Label>
+                <input type="hidden" name="role" value={role} />
+                <Select
+                    value={role}
+                    onValueChange={(value) => onRoleChange(value as LeaderRole)}
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="dean">College Dean</SelectItem>
+                        <SelectItem value="program_head">Program Head</SelectItem>
+                    </SelectContent>
+                </Select>
+                <InputError message={errors.role} />
+            </div>
+
+            {role === 'dean' ? (
+                <div className="grid gap-2">
+                    <Label>Assigned course</Label>
+                    <input type="hidden" name="course_id" value={courseId} />
+                    <Select value={courseId} onValueChange={onCourseIdChange}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select course" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {availableCourses.length === 0 ? (
+                                <SelectItem value="none" disabled>
+                                    No courses available
+                                </SelectItem>
+                            ) : (
+                                availableCourses.map((course) => (
+                                    <SelectItem
+                                        key={course.id}
+                                        value={String(course.id)}
+                                    >
+                                        {course.code} — {course.name}
+                                    </SelectItem>
+                                ))
+                            )}
+                        </SelectContent>
+                    </Select>
+                    <InputError message={errors.course_id} />
+                </div>
+            ) : (
+                <div className="grid gap-2">
+                    <Label>Assigned program</Label>
+                    <input type="hidden" name="course_major_id" value={majorId} />
+                    <Select value={majorId} onValueChange={onMajorIdChange}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select program" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {availableMajors.length === 0 ? (
+                                <SelectItem value="none" disabled>
+                                    No programs available. Add majors on the
+                                    Courses page first.
+                                </SelectItem>
+                            ) : (
+                                availableMajors.map((major) => (
+                                    <SelectItem
+                                        key={major.id}
+                                        value={String(major.id)}
+                                    >
+                                        {formatMajorLabel(major, major.course)}
+                                    </SelectItem>
+                                ))
+                            )}
+                        </SelectContent>
+                    </Select>
+                    <InputError message={errors.course_major_id} />
+                </div>
+            )}
+        </>
+    );
+}
+
+export default function Deans({ leaders, courses }: Props) {
     const [createOpen, setCreateOpen] = useState(false);
-    const [editDean, setEditDean] = useState<Dean | null>(null);
+    const [editLeader, setEditLeader] = useState<Leader | null>(null);
+    const [createRole, setCreateRole] = useState<LeaderRole>('dean');
+    const [createCourseId, setCreateCourseId] = useState('');
+    const [createMajorId, setCreateMajorId] = useState('');
+    const [editRole, setEditRole] = useState<LeaderRole>('dean');
+    const [editCourseId, setEditCourseId] = useState('');
+    const [editMajorId, setEditMajorId] = useState('');
+    const [editIsActive, setEditIsActive] = useState(true);
     const storeRoute = store();
 
-    console.log('Deans index loaded', { count: deans.length });
+    useEffect(() => {
+        if (createOpen) {
+            setCreateRole('dean');
+            setCreateCourseId('');
+            setCreateMajorId('');
+        }
+    }, [createOpen]);
 
-    const handleDeactivate = (dean: Dean) => {
+    useEffect(() => {
+        if (editLeader) {
+            setEditRole(editLeader.role);
+            setEditCourseId(
+                editLeader.course ? String(editLeader.course.id) : '',
+            );
+            setEditMajorId(
+                editLeader.course_major
+                    ? String(editLeader.course_major.id)
+                    : '',
+            );
+            setEditIsActive(editLeader.is_active);
+        }
+    }, [editLeader]);
+
+    useEffect(() => {
+        if (createRole === 'dean') {
+            setCreateMajorId('');
+        } else {
+            setCreateCourseId('');
+        }
+    }, [createRole]);
+
+    useEffect(() => {
+        if (editRole === 'dean') {
+            setEditMajorId('');
+        } else {
+            setEditCourseId('');
+        }
+    }, [editRole]);
+
+    console.log('Deans index loaded', {
+        leaderCount: leaders.length,
+        courseCount: courses.length,
+    });
+
+    const handleDeactivate = (leader: Leader) => {
         if (
             !confirm(
-                `Deactivate ${dean.name}? They will no longer be able to log in.`,
+                `Deactivate ${leader.name}? They will no longer be able to log in.`,
             )
         ) {
             return;
         }
 
-        router.delete(destroy(dean.id).url, {
+        router.delete(destroy(leader.id).url, {
             preserveScroll: true,
         });
     };
@@ -60,8 +304,8 @@ export default function Deans({ deans }: Props) {
 
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
                 <PageHeader
-                    title="Manage Deans"
-                    description="Create dean accounts and assign them to courses."
+                    title="Manage Deans & Program Heads"
+                    description="Create accounts and assign college deans to courses or program heads to specific majors."
                     icon={Users}
                     action={
                         <Button
@@ -69,14 +313,14 @@ export default function Deans({ deans }: Props) {
                             className="bg-brand text-brand-foreground hover:bg-brand-hover"
                         >
                             <Plus className="mr-2 size-4" />
-                            Add Dean
+                            Add account
                         </Button>
                     }
                 />
 
                 <Card className="border-sidebar-border/70">
                     <CardHeader>
-                        <CardTitle>Dean accounts ({deans.length})</CardTitle>
+                        <CardTitle>Accounts ({leaders.length})</CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
@@ -90,7 +334,10 @@ export default function Deans({ deans }: Props) {
                                             Email
                                         </th>
                                         <th className="px-4 py-3 font-medium">
-                                            Assigned course
+                                            Role
+                                        </th>
+                                        <th className="px-4 py-3 font-medium">
+                                            Assignment
                                         </th>
                                         <th className="px-4 py-3 font-medium">
                                             Status
@@ -101,33 +348,40 @@ export default function Deans({ deans }: Props) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {deans.length === 0 ? (
+                                    {leaders.length === 0 ? (
                                         <tr>
                                             <td
-                                                colSpan={5}
+                                                colSpan={6}
                                                 className="px-4 py-8 text-center text-muted-foreground"
                                             >
-                                                No deans yet. Click Add Dean to
-                                                create one.
+                                                No accounts yet. Click Add
+                                                account to create one.
                                             </td>
                                         </tr>
                                     ) : (
-                                        deans.map((dean) => (
+                                        leaders.map((leader) => (
                                             <tr
-                                                key={dean.id}
+                                                key={leader.id}
                                                 className="border-b last:border-0"
                                             >
                                                 <td className="px-4 py-3 font-medium">
-                                                    {dean.name}
+                                                    {leader.name}
                                                 </td>
                                                 <td className="px-4 py-3 text-muted-foreground">
-                                                    {dean.email}
+                                                    {leader.email}
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    {dean.course ? (
+                                                    <Badge variant="secondary">
+                                                        {leader.role_label}
+                                                    </Badge>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {leader.course
+                                                    || leader.course_major ? (
                                                         <span>
-                                                            {dean.course.code}{' '}
-                                                            — {dean.course.name}
+                                                            {formatAssignment(
+                                                                leader,
+                                                            )}
                                                         </span>
                                                     ) : (
                                                         <span className="text-muted-foreground">
@@ -138,17 +392,17 @@ export default function Deans({ deans }: Props) {
                                                 <td className="px-4 py-3">
                                                     <Badge
                                                         variant={
-                                                            dean.is_active
+                                                            leader.is_active
                                                                 ? 'default'
                                                                 : 'secondary'
                                                         }
                                                         className={
-                                                            dean.is_active
+                                                            leader.is_active
                                                                 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300'
                                                                 : ''
                                                         }
                                                     >
-                                                        {dean.is_active
+                                                        {leader.is_active
                                                             ? 'Active'
                                                             : 'Inactive'}
                                                     </Badge>
@@ -159,19 +413,21 @@ export default function Deans({ deans }: Props) {
                                                             variant="outline"
                                                             size="sm"
                                                             onClick={() =>
-                                                                setEditDean(dean)
+                                                                setEditLeader(
+                                                                    leader,
+                                                                )
                                                             }
                                                         >
                                                             <Pencil className="size-3.5" />
                                                         </Button>
-                                                        {dean.is_active && (
+                                                        {leader.is_active && (
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
                                                                 className="text-red-600 hover:text-red-700"
                                                                 onClick={() =>
                                                                     handleDeactivate(
-                                                                        dean,
+                                                                        leader,
                                                                     )
                                                                 }
                                                             >
@@ -193,8 +449,8 @@ export default function Deans({ deans }: Props) {
             <AppModal
                 open={createOpen}
                 onOpenChange={setCreateOpen}
-                title="Add Dean"
-                description="Create a new dean account for course management."
+                title="Add account"
+                description="Create a college dean or program head account and assign their scope."
             >
                 <Form
                     action={storeRoute.url}
@@ -225,6 +481,16 @@ export default function Deans({ deans }: Props) {
                                 />
                                 <InputError message={errors.email} />
                             </div>
+                            <RoleAssignmentFields
+                                role={createRole}
+                                onRoleChange={setCreateRole}
+                                courseId={createCourseId}
+                                onCourseIdChange={setCreateCourseId}
+                                majorId={createMajorId}
+                                onMajorIdChange={setCreateMajorId}
+                                courses={courses}
+                                errors={errors}
+                            />
                             <div className="grid gap-2">
                                 <Label htmlFor="create-password">Password</Label>
                                 <PasswordInput
@@ -258,7 +524,7 @@ export default function Deans({ deans }: Props) {
                                     className="bg-brand text-brand-foreground hover:bg-brand-hover"
                                 >
                                     {processing && <Spinner />}
-                                    Create Dean
+                                    Create account
                                 </Button>
                             </div>
                         </>
@@ -266,17 +532,17 @@ export default function Deans({ deans }: Props) {
                 </Form>
             </AppModal>
 
-            {editDean && (
+            {editLeader && (
                 <AppModal
-                    open={!!editDean}
-                    onOpenChange={(open) => !open && setEditDean(null)}
-                    title="Edit Dean"
-                    description={`Update account for ${editDean.name}`}
+                    open={!!editLeader}
+                    onOpenChange={(open) => !open && setEditLeader(null)}
+                    title="Edit account"
+                    description={`Update account for ${editLeader.name}`}
                 >
                     <Form
-                        action={update(editDean.id).url}
-                        method={update(editDean.id).method}
-                        onSuccess={() => setEditDean(null)}
+                        action={update(editLeader.id).url}
+                        method={update(editLeader.id).method}
+                        onSuccess={() => setEditLeader(null)}
                         className="space-y-4"
                     >
                         {({ processing, errors }) => (
@@ -286,7 +552,7 @@ export default function Deans({ deans }: Props) {
                                     <Input
                                         id="edit-name"
                                         name="name"
-                                        defaultValue={editDean.name}
+                                        defaultValue={editLeader.name}
                                         required
                                     />
                                     <InputError message={errors.name} />
@@ -297,11 +563,22 @@ export default function Deans({ deans }: Props) {
                                         id="edit-email"
                                         name="email"
                                         type="email"
-                                        defaultValue={editDean.email}
+                                        defaultValue={editLeader.email}
                                         required
                                     />
                                     <InputError message={errors.email} />
                                 </div>
+                                <RoleAssignmentFields
+                                    role={editRole}
+                                    onRoleChange={setEditRole}
+                                    courseId={editCourseId}
+                                    onCourseIdChange={setEditCourseId}
+                                    majorId={editMajorId}
+                                    onMajorIdChange={setEditMajorId}
+                                    courses={courses}
+                                    userId={editLeader.id}
+                                    errors={errors}
+                                />
                                 <div className="grid gap-2">
                                     <Label htmlFor="edit-password">
                                         New password (optional)
@@ -325,13 +602,14 @@ export default function Deans({ deans }: Props) {
                                     <input
                                         type="hidden"
                                         name="is_active"
-                                        value="0"
+                                        value={editIsActive ? '1' : '0'}
                                     />
                                     <Checkbox
                                         id="edit-is-active"
-                                        name="is_active"
-                                        value="1"
-                                        defaultChecked={editDean.is_active}
+                                        checked={editIsActive}
+                                        onCheckedChange={(checked) =>
+                                            setEditIsActive(checked === true)
+                                        }
                                     />
                                     <Label htmlFor="edit-is-active">
                                         Account is active
@@ -342,7 +620,7 @@ export default function Deans({ deans }: Props) {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => setEditDean(null)}
+                                        onClick={() => setEditLeader(null)}
                                     >
                                         Cancel
                                     </Button>

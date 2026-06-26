@@ -16,7 +16,7 @@ class UpdateSchoolYearRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('dean') ?? false;
+        return $this->user()?->isDeanPortalUser() ?? false;
     }
 
     /**

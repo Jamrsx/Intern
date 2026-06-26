@@ -2,24 +2,21 @@
 
 namespace App\Http\Requests\Dean;
 
+use App\Concerns\AuthorizesDeanPortal;
 use App\Models\Section;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateSectionRequest extends FormRequest
 {
+    use AuthorizesDeanPortal;
+
     public function authorize(): bool
     {
-        if (! ($this->user()?->hasRole('dean') ?? false)) {
-            return false;
-        }
-
-        $courseId = $this->user()?->courseAsDean?->id;
         $section = $this->route('section');
 
-        return $courseId !== null
-            && $section instanceof Section
-            && $section->course_id === $courseId;
+        return $section instanceof Section
+            && $this->sectionInDeanPortalScope($section);
     }
 
     /**
@@ -27,7 +24,7 @@ class UpdateSectionRequest extends FormRequest
      */
     public function rules(): array
     {
-        $courseId = $this->user()?->courseAsDean?->id;
+        $courseId = $this->user()?->deanPortalCourse()?->id;
 
         /** @var Section $section */
         $section = $this->route('section');
@@ -45,7 +42,15 @@ class UpdateSectionRequest extends FormRequest
                 Rule::unique('sections', 'name')
                     ->where(fn ($query) => $query
                         ->where('course_id', $courseId)
-                        ->where('school_year_id', $this->input('school_year_id')))
+                        ->where('school_year_id', $this->input('school_year_id'))
+                        ->when(
+                            $section->course_major_id !== null,
+                            fn ($scopedQuery) => $scopedQuery->where(
+                                'course_major_id',
+                                $section->course_major_id,
+                            ),
+                            fn ($scopedQuery) => $scopedQuery->whereNull('course_major_id'),
+                        ))
                     ->ignore($section->id),
             ],
             'code' => ['nullable', 'string', 'max:20'],
@@ -59,7 +64,7 @@ class UpdateSectionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.unique' => 'This section name already exists for the selected school year.',
+            'name.unique' => 'This section name already exists for the selected school year and program.',
             'school_year_id.exists' => 'Please select an active school year.',
         ];
     }

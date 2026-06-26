@@ -25,9 +25,6 @@ class UpdateCourseRequest extends FormRequest
             ->map(fn (array $major): array => [
                 'name' => trim((string) $major['name']),
                 'code' => filled($major['code'] ?? null) ? trim((string) $major['code']) : null,
-                'program_head_name' => filled($major['program_head_name'] ?? null)
-                    ? trim((string) $major['program_head_name'])
-                    : null,
             ])
             ->values()
             ->all();
@@ -63,7 +60,6 @@ class UpdateCourseRequest extends FormRequest
             'majors' => ['nullable', 'array'],
             'majors.*.name' => ['required', 'string', 'max:255'],
             'majors.*.code' => ['nullable', 'string', 'max:20'],
-            'majors.*.program_head_name' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

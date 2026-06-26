@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dean;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\StoreCoordinatorRequest;
 use App\Http\Requests\Dean\UpdateCoordinatorRequest;
 use App\Mail\CoordinatorAccountCredentialsMail;
@@ -20,6 +21,8 @@ use Inertia\Response;
 
 class CoordinatorController extends Controller
 {
+    use ResolvesDeanScope;
+
     public function index(Request $request): Response
     {
         $course = $this->deanCourse($request);
@@ -32,10 +35,9 @@ class CoordinatorController extends Controller
             ]);
         }
 
-        $sections = Section::query()
+        $sections = $this->deanSectionsQuery($request)
             ->with('schoolYear:id,name,is_active')
             ->with('coordinator:id,name,email,is_active')
-            ->where('course_id', $course->id)
             ->where('is_active', true)
             ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
             ->orderBy('name')
@@ -50,8 +52,7 @@ class CoordinatorController extends Controller
             ->values()
             ->all();
 
-        $coordinatorIds = Section::query()
-            ->where('course_id', $course->id)
+        $coordinatorIds = $this->deanSectionsQuery($request)
             ->whereNotNull('coordinator_user_id')
             ->pluck('coordinator_user_id')
             ->unique()
@@ -61,10 +62,9 @@ class CoordinatorController extends Controller
             ->whereIn('id', $coordinatorIds)
             ->orderBy('name')
             ->get()
-            ->map(function (User $coordinator) use ($course) {
-                $section = Section::query()
+            ->map(function (User $coordinator) use ($request, $course) {
+                $section = $this->deanSectionsQuery($request)
                     ->with('schoolYear:id,name')
-                    ->where('course_id', $course->id)
                     ->where('coordinator_user_id', $coordinator->id)
                     ->first();
 
@@ -85,11 +85,7 @@ class CoordinatorController extends Controller
             ->all();
 
         return Inertia::render('deans/coordinators', [
-            'course' => [
-                'id' => $course->id,
-                'code' => $course->code,
-                'name' => $course->name,
-            ],
+            'course' => $this->deanPortalContextPayload($request),
             'sections' => $sections,
             'coordinators' => $coordinators,
         ]);
@@ -105,9 +101,9 @@ class CoordinatorController extends Controller
             ? Str::password(10)
             : (string) $validated['password'];
 
-        abort_unless($section->course_id === $course->id, 404);
+        $this->ensureSectionInDeanScope($section, $request);
 
-        $coordinator = DB::transaction(function () use ($validated, $section, $password, $course) {
+        $coordinator = DB::transaction(function () use ($validated, $section, $password) {
             $coordinatorRoleId = Role::query()->where('name', 'coordinator')->valueOrFail('id');
 
             $user = User::query()->create([
@@ -161,17 +157,16 @@ class CoordinatorController extends Controller
         $section = $request->section();
         $isActive = $request->boolean('is_active', $coordinator->is_active);
 
-        abort_unless($section->course_id === $course->id, 404);
+        $this->ensureSectionInDeanScope($section, $request);
 
-        DB::transaction(function () use ($coordinator, $validated, $section, $course, $isActive): void {
+        DB::transaction(function () use ($coordinator, $validated, $section, $request, $isActive) {
             $coordinator->update([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'is_active' => $isActive,
             ]);
 
-            Section::query()
-                ->where('course_id', $course->id)
+            $this->deanSectionsQuery($request)
                 ->where('coordinator_user_id', $coordinator->id)
                 ->whereKeyNot($section->id)
                 ->update(['coordinator_user_id' => null]);
@@ -194,8 +189,7 @@ class CoordinatorController extends Controller
         abort_unless($coordinator->hasRole('coordinator'), 404);
         abort_unless($coordinator->is_active, 422);
 
-        $assigned = Section::query()
-            ->where('course_id', $course->id)
+        $assigned = $this->deanSectionsQuery($request)
             ->where('coordinator_user_id', $coordinator->id)
             ->exists();
 
@@ -224,20 +218,18 @@ class CoordinatorController extends Controller
 
     public function destroy(Request $request, User $coordinator): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
+        $this->deanCourseOrFail($request);
 
         abort_unless($coordinator->hasRole('coordinator'), 404);
 
-        $assigned = Section::query()
-            ->where('course_id', $course->id)
+        $assigned = $this->deanSectionsQuery($request)
             ->where('coordinator_user_id', $coordinator->id)
             ->exists();
 
         abort_unless($assigned, 404);
 
-        DB::transaction(function () use ($coordinator, $course): void {
-            Section::query()
-                ->where('course_id', $course->id)
+        DB::transaction(function () use ($coordinator, $request) {
+            $this->deanSectionsQuery($request)
                 ->where('coordinator_user_id', $coordinator->id)
                 ->update(['coordinator_user_id' => null]);
 
@@ -250,22 +242,6 @@ class CoordinatorController extends Controller
         ]);
 
         return redirect()->route('deans.coordinators.index');
-    }
-
-    private function deanCourse(Request $request): ?Course
-    {
-        return Course::query()
-            ->where('dean_user_id', $request->user()->id)
-            ->first();
-    }
-
-    private function deanCourseOrFail(Request $request): Course
-    {
-        $course = $this->deanCourse($request);
-
-        abort_if($course === null, 403, 'You are not assigned to a course yet.');
-
-        return $course;
     }
 
     private function sendCoordinatorCredentials(

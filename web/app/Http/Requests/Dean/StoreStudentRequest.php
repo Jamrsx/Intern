@@ -2,15 +2,18 @@
 
 namespace App\Http\Requests\Dean;
 
+use App\Concerns\AuthorizesDeanPortal;
+use App\Support\DeanPortalScope;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreStudentRequest extends FormRequest
 {
+    use AuthorizesDeanPortal;
+
     public function authorize(): bool
     {
-        return ($this->user()?->hasRole('dean') ?? false)
-            && $this->user()?->courseAsDean !== null;
+        return $this->authorizedForDeanPortal();
     }
 
     /**
@@ -18,7 +21,10 @@ class StoreStudentRequest extends FormRequest
      */
     public function rules(): array
     {
-        $courseId = $this->user()?->courseAsDean?->id;
+        $scopedSectionIds = DeanPortalScope::sectionsQuery($this->user())
+            ->where('is_active', true)
+            ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
+            ->pluck('id');
 
         return [
             'student_number' => [
@@ -35,15 +41,7 @@ class StoreStudentRequest extends FormRequest
             'section_id' => [
                 'required',
                 'integer',
-                Rule::exists('sections', 'id')->where(function ($query) use ($courseId) {
-                    $query->where('course_id', $courseId)
-                        ->where('is_active', true)
-                        ->whereIn('school_year_id', function ($subQuery) {
-                            $subQuery->select('id')
-                                ->from('school_years')
-                                ->where('is_active', true);
-                        });
-                }),
+                Rule::in($scopedSectionIds->all()),
             ],
         ];
     }
@@ -56,6 +54,7 @@ class StoreStudentRequest extends FormRequest
         return [
             'student_number.regex' => 'Student ID must follow the format YYYY-N-##### (e.g. 2022-0-00000).',
             'student_number.unique' => 'This student ID is already registered.',
+            'section_id.in' => 'Please select an active section in your scope.',
         ];
     }
 }

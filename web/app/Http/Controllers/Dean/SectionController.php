@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\Dean;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\StoreSectionRequest;
 use App\Http\Requests\Dean\UpdateSectionRequest;
-use App\Models\Course;
+use App\Models\CourseMajor;
 use App\Models\SchoolYear;
 use App\Models\Section;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +16,8 @@ use Inertia\Response;
 
 class SectionController extends Controller
 {
+    use ResolvesDeanScope;
+
     public function index(Request $request): Response
     {
         $course = $this->deanCourse($request);
@@ -27,10 +30,12 @@ class SectionController extends Controller
         $sections = collect();
 
         if ($course !== null) {
-            $sections = Section::query()
-                ->with('schoolYear:id,name,is_active')
+            $sections = $this->deanSectionsQuery($request)
+                ->with([
+                    'schoolYear:id,name,is_active',
+                    'courseMajor:id,code,name',
+                ])
                 ->withCount('students')
-                ->where('course_id', $course->id)
                 ->whereHas('schoolYear', fn ($query) => $query->where('is_active', true))
                 ->orderBy('name')
                 ->get()
@@ -45,18 +50,47 @@ class SectionController extends Controller
                         'name' => $section->schoolYear->name,
                         'is_active' => $section->schoolYear->is_active,
                     ] : null,
+                    'course_major' => $section->courseMajor ? [
+                        'id' => $section->courseMajor->id,
+                        'code' => $section->courseMajor->code,
+                        'name' => $section->courseMajor->name,
+                        'display_name' => trim(
+                            ($section->courseMajor->code
+                                ? "{$course->code}-{$section->courseMajor->code}"
+                                : $course->code)
+                            .' — '
+                            .$section->courseMajor->name,
+                        ),
+                    ] : null,
                     'students_count' => $section->students_count,
                     'is_active' => $section->is_active,
                     'created_at' => $section->created_at?->toIso8601String(),
                 ]);
         }
 
+        $majors = $course === null
+            ? []
+            : CourseMajor::query()
+                ->where('course_id', $course->id)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (CourseMajor $major) => [
+                    'id' => $major->id,
+                    'code' => $major->code,
+                    'name' => $major->name,
+                    'display_name' => trim(
+                        ($major->code ? "{$course->code}-{$major->code}" : $course->code)
+                        .' — '
+                        .$major->name,
+                    ),
+                ])
+                ->values()
+                ->all();
+
         return Inertia::render('deans/sections', [
-            'course' => $course ? [
-                'id' => $course->id,
-                'code' => $course->code,
-                'name' => $course->name,
-            ] : null,
+            'course' => $this->deanPortalContextPayload($request),
+            'majors' => $majors,
             'schoolYears' => $schoolYears,
             'sections' => $sections,
         ]);
@@ -65,9 +99,25 @@ class SectionController extends Controller
     public function store(StoreSectionRequest $request): RedirectResponse
     {
         $course = $this->deanCourseOrFail($request);
+        $majorId = $this->resolveSectionMajorId(
+            $request,
+            $request->integer('course_major_id') ?: null,
+        );
+
+        if ($majorId !== null) {
+            abort_unless(
+                CourseMajor::query()
+                    ->whereKey($majorId)
+                    ->where('course_id', $course->id)
+                    ->exists(),
+                422,
+                'The selected program does not belong to your course.',
+            );
+        }
 
         Section::query()->create([
             'course_id' => $course->id,
+            'course_major_id' => $majorId,
             'school_year_id' => $request->validated('school_year_id'),
             'name' => $request->validated('name'),
             'code' => $request->validated('code'),
@@ -84,6 +134,8 @@ class SectionController extends Controller
 
     public function update(UpdateSectionRequest $request, Section $section): RedirectResponse
     {
+        $this->ensureSectionInDeanScope($section, $request);
+
         $section->update([
             'school_year_id' => $request->validated('school_year_id'),
             'name' => $request->validated('name'),
@@ -101,8 +153,7 @@ class SectionController extends Controller
 
     public function destroy(Request $request, Section $section): RedirectResponse
     {
-        $course = $this->deanCourseOrFail($request);
-        abort_unless($section->course_id === $course->id, 404);
+        $this->ensureSectionInDeanScope($section, $request);
 
         if ($section->students()->exists()) {
             Inertia::flash('toast', [
@@ -121,21 +172,5 @@ class SectionController extends Controller
         ]);
 
         return redirect()->route('deans.sections.index');
-    }
-
-    private function deanCourse(Request $request): ?Course
-    {
-        return Course::query()
-            ->where('dean_user_id', $request->user()->id)
-            ->first();
-    }
-
-    private function deanCourseOrFail(Request $request): Course
-    {
-        $course = $this->deanCourse($request);
-
-        abort_if($course === null, 403, 'You are not assigned to a course yet.');
-
-        return $course;
     }
 }

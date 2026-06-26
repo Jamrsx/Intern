@@ -51,7 +51,7 @@ test('super admin can assign dean to course', function () {
         ->toBe($dean->id);
 });
 
-test('super admin can create a course with majors and program heads', function () {
+test('super admin can create a course with majors', function () {
     $this->actingAs($this->superAdmin)
         ->post(route('superadmin.courses.store'), [
             'code' => 'BSBA',
@@ -63,12 +63,10 @@ test('super admin can create a course with majors and program heads', function (
                 [
                     'name' => 'Financial Management',
                     'code' => 'FM',
-                    'program_head_name' => 'Dr. Jane Doe',
                 ],
                 [
                     'name' => 'Marketing Management',
                     'code' => 'MM',
-                    'program_head_name' => 'Dr. John Smith',
                 ],
             ],
         ])
@@ -79,8 +77,8 @@ test('super admin can create a course with majors and program heads', function (
     expect($course)->not->toBeNull();
     expect($course->majors)->toHaveCount(2);
     expect($course->majors->pluck('code')->all())->toBe(['FM', 'MM']);
-    expect($course->majors->firstWhere('code', 'FM')?->program_head_name)
-        ->toBe('Dr. Jane Doe');
+    expect($course->majors->firstWhere('code', 'FM')?->name)
+        ->toBe('Financial Management');
 });
 
 test('super admin can update course majors', function () {
@@ -102,12 +100,10 @@ test('super admin can update course majors', function () {
                 [
                     'name' => 'Primary Education',
                     'code' => null,
-                    'program_head_name' => 'Prof. Ana Reyes',
                 ],
                 [
                     'name' => 'Secondary Education Major in English',
                     'code' => null,
-                    'program_head_name' => 'Prof. Mark Lim',
                 ],
             ],
         ])

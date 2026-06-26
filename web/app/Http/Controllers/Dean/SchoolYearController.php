@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Dean;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\StoreSchoolYearRequest;
 use App\Http\Requests\Dean\UpdateSchoolYearRequest;
-use App\Models\Course;
 use App\Models\SchoolYear;
+use App\Models\Section;
 use App\Services\SchoolYearArchivingService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +18,8 @@ use Inertia\Response;
 
 class SchoolYearController extends Controller
 {
+    use ResolvesDeanScope;
+
     public function __construct(
         private readonly SchoolYearArchivingService $schoolYearArchivingService,
     ) {}
@@ -28,7 +32,7 @@ class SchoolYearController extends Controller
 
         if ($course !== null) {
             $schoolYearsQuery->withCount([
-                'sections' => fn ($query) => $query->where('course_id', $course->id),
+                'sections' => fn ($query) => $this->applyDeanSectionScopeToRelation($query, $request),
             ]);
         } else {
             $schoolYearsQuery->withCount([
@@ -49,11 +53,7 @@ class SchoolYearController extends Controller
             ]);
 
         return Inertia::render('deans/school-years', [
-            'course' => $course ? [
-                'id' => $course->id,
-                'code' => $course->code,
-                'name' => $course->name,
-            ] : null,
+            'course' => $this->deanPortalContextPayload($request),
             'schoolYears' => $schoolYears,
         ]);
     }
@@ -218,8 +218,7 @@ class SchoolYearController extends Controller
             ->where('is_active', false)
             ->orderByDesc('name')
             ->with([
-                'sections' => fn ($query) => $query
-                    ->where('course_id', $course->id)
+                'sections' => fn ($query) => $this->applyDeanSectionScopeToRelation($query, $request)
                     ->with([
                         'coordinator:id,name,email',
                         'students' => fn ($studentQuery) => $studentQuery
@@ -272,19 +271,31 @@ class SchoolYearController extends Controller
             ->values();
 
         return Inertia::render('deans/school-years/archive', [
-            'course' => [
-                'id' => $course->id,
-                'code' => $course->code,
-                'name' => $course->name,
-            ],
+            'course' => $this->deanPortalContextPayload($request),
             'archivedSchoolYears' => $archivedSchoolYears,
         ]);
     }
 
-    private function deanCourse(Request $request): ?Course
+    /**
+     * @param  Builder<Section>  $query
+     * @return Builder<Section>
+     */
+    private function applyDeanSectionScopeToRelation($query, Request $request)
     {
-        return Course::query()
-            ->where('dean_user_id', $request->user()->id)
-            ->first();
+        $course = $this->deanCourse($request);
+
+        if ($course === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $query->where('course_id', $course->id);
+
+        $major = $this->deanMajor($request);
+
+        if ($major !== null) {
+            $query->where('course_major_id', $major->id);
+        }
+
+        return $query;
     }
 }

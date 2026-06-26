@@ -32,10 +32,19 @@ import {
 } from '@/routes/deans/sections';
 import { index as schoolYearsIndex } from '@/routes/deans/school-years';
 
+type CourseMajor = {
+    id: number;
+    code: string | null;
+    name: string;
+    display_name: string;
+};
+
 type Course = {
     id: number;
     code: string;
     name: string;
+    portal_role?: 'dean' | 'program_head';
+    major?: CourseMajor | null;
 };
 
 type SchoolYearOption = {
@@ -58,6 +67,7 @@ type Section = {
     students_count: number;
     is_active: boolean;
     created_at: string | null;
+    course_major: CourseMajor | null;
 };
 
 type SectionGroup = {
@@ -69,6 +79,7 @@ type SectionGroup = {
 
 type Props = {
     course: Course | null;
+    majors: CourseMajor[];
     schoolYears: SchoolYearOption[];
     sections: Section[];
 };
@@ -138,8 +149,39 @@ function SchoolYearSelect({
     );
 }
 
+function MajorSelect({
+    majors,
+    value,
+    onChange,
+    name = 'course_major_id',
+}: {
+    majors: CourseMajor[];
+    value: string;
+    onChange: (value: string) => void;
+    name?: string;
+}) {
+    return (
+        <>
+            <input type="hidden" name={name} value={value} />
+            <Select value={value} onValueChange={onChange}>
+                <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select program / major" />
+                </SelectTrigger>
+                <SelectContent>
+                    {majors.map((major) => (
+                        <SelectItem key={major.id} value={String(major.id)}>
+                            {major.display_name}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </>
+    );
+}
+
 export default function DeanSections({
     course,
+    majors,
     schoolYears,
     sections,
 }: Props) {
@@ -147,6 +189,7 @@ export default function DeanSections({
     const [editSection, setEditSection] = useState<Section | null>(null);
     const [filterSchoolYearId, setFilterSchoolYearId] = useState('all');
     const [createSchoolYearId, setCreateSchoolYearId] = useState('');
+    const [createMajorId, setCreateMajorId] = useState('');
     const [editSchoolYearId, setEditSchoolYearId] = useState('');
     const [openGroups, setOpenGroups] = useState<Record<number, boolean>>({});
     const [hasLoadedGroupState, setHasLoadedGroupState] = useState(false);
@@ -209,10 +252,17 @@ export default function DeanSections({
 
     console.log('Dean Sections page loaded', {
         course,
+        majorsCount: majors.length,
         sectionsCount: sections.length,
         groupCount: sectionGroups.length,
         savedGroupState: openGroups,
     });
+
+    const isProgramHead = course?.portal_role === 'program_head';
+    const showMajorColumn =
+        majors.length > 0 || sections.some((section) => section.course_major !== null);
+    const requiresMajorOnCreate =
+        !isProgramHead && majors.length > 0;
 
     const handleDeactivate = (section: Section) => {
         if (
@@ -232,6 +282,7 @@ export default function DeanSections({
         setCreateSchoolYearId(
             activeSchoolYearId ? String(activeSchoolYearId) : '',
         );
+        setCreateMajorId(majors[0] ? String(majors[0].id) : '');
         setCreateOpen(true);
     };
 
@@ -281,7 +332,7 @@ export default function DeanSections({
                             : 'You need an assigned course before you can manage sections.'
                     }
                     icon={ListChecks}
-                    badgeText="Dean"
+                    badgeText={isProgramHead ? 'Program Head' : 'Dean'}
                     action={
                         canAddSection ? (
                             <Button
@@ -441,6 +492,11 @@ export default function DeanSections({
                                                                 <th className="px-4 py-3 font-medium">
                                                                     Code
                                                                 </th>
+                                                                {showMajorColumn && (
+                                                                    <th className="px-4 py-3 font-medium">
+                                                                        Program
+                                                                    </th>
+                                                                )}
                                                                 <th className="px-4 py-3 font-medium">
                                                                     Students
                                                                 </th>
@@ -470,6 +526,13 @@ export default function DeanSections({
                                                                             {section.code ??
                                                                                 '—'}
                                                                         </td>
+                                                                        {showMajorColumn && (
+                                                                            <td className="px-4 py-3 text-muted-foreground">
+                                                                                {section.course_major
+                                                                                    ?.display_name ??
+                                                                                    '—'}
+                                                                            </td>
+                                                                        )}
                                                                         <td className="px-4 py-3">
                                                                             {
                                                                                 section.students_count
@@ -564,6 +627,19 @@ export default function DeanSections({
                                     />
                                     <InputError message={errors.school_year_id} />
                                 </div>
+                                {requiresMajorOnCreate && (
+                                    <div className="grid gap-2">
+                                        <Label>Program / major</Label>
+                                        <MajorSelect
+                                            majors={majors}
+                                            value={createMajorId}
+                                            onChange={setCreateMajorId}
+                                        />
+                                        <InputError
+                                            message={errors.course_major_id}
+                                        />
+                                    </div>
+                                )}
                                 <div className="grid gap-2">
                                     <Label htmlFor="create-name">
                                         Section name
@@ -625,7 +701,10 @@ export default function DeanSections({
                                     <Button
                                         type="submit"
                                         disabled={
-                                            processing || !createSchoolYearId
+                                            processing
+                                            || !createSchoolYearId
+                                            || (requiresMajorOnCreate
+                                                && !createMajorId)
                                         }
                                         className="bg-brand text-brand-foreground hover:bg-brand-hover"
                                     >
