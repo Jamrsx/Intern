@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     LayoutGrid,
@@ -23,7 +23,15 @@ import { index as deanCoordinatorsIndex } from '@/routes/deans/coordinators';
 import { index as deanSchoolYearsIndex } from '@/routes/deans/school-years';
 import { index as deanSectionsIndex } from '@/routes/deans/sections';
 import { index as deanStudentsIndex } from '@/routes/deans/students';
-import type { NavGroup } from '@/types';
+import type { Auth, NavGroup } from '@/types';
+
+function deanPortalRoleLabel(roleName: string | undefined): string {
+    if (roleName === 'program_head') {
+        return 'Program Head';
+    }
+
+    return 'Dean';
+}
 
 const navGroups: NavGroup[] = [
     {
@@ -69,8 +77,13 @@ const navGroups: NavGroup[] = [
 ];
 
 export function DeanSidebar() {
+    const { auth } = usePage<{ auth: Auth }>().props;
+    const roleLabel = deanPortalRoleLabel(auth.user?.role?.name);
+
     console.log('Dean sidebar nav groups loaded', {
         groups: navGroups.map((group) => group.label),
+        role: auth.user?.role?.name,
+        roleLabel,
     });
 
     return (
@@ -86,7 +99,7 @@ export function DeanSidebar() {
                                         OCC Intern
                                     </span>
                                     <span className="truncate text-xs text-muted-foreground">
-                                        Dean
+                                        {roleLabel}
                                     </span>
                                 </div>
                             </Link>
