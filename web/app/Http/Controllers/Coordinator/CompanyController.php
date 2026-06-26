@@ -13,6 +13,7 @@ use App\Models\Course;
 use App\Models\Department;
 use App\Models\Section;
 use App\Models\Student;
+use App\Models\Supervisor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -290,6 +291,9 @@ class CompanyController extends Controller
             ->where('is_active', $activeOnly)
             ->with([
                 'departments' => fn ($query) => $query
+                    ->with([
+                        'activeSupervisors.user:id,name,email,is_active',
+                    ])
                     ->withCount([
                         'students as students_count' => fn ($studentQuery) => $studentQuery
                             ->where('is_active', true)
@@ -319,6 +323,9 @@ class CompanyController extends Controller
         if ($section !== null && ! $company->relationLoaded('departments')) {
             $company->load([
                 'departments' => fn ($query) => $query
+                    ->with([
+                        'activeSupervisors.user:id,name,email,is_active',
+                    ])
                     ->withCount([
                         'students as students_count' => fn ($studentQuery) => $studentQuery
                             ->where('is_active', true)
@@ -343,12 +350,54 @@ class CompanyController extends Controller
             'departments_count' => $company->departments_count ?? $company->departments()->count(),
             'supervisors_count' => $company->supervisors_count ?? $company->supervisors()->count(),
             'students_count' => $company->students_count ?? 0,
-            'departments' => $company->departments?->map(fn (Department $department) => [
-                'id' => $department->id,
-                'name' => $department->name,
-                'is_active' => $department->is_active,
-                'students_count' => $department->students_count ?? 0,
-            ])->values()->all() ?? [],
+            'departments' => $company->departments?->map(
+                fn (Department $department) => $this->departmentPayload($department),
+            )->values()->all() ?? [],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function departmentPayload(Department $department): array
+    {
+        $headSupervisor = $this->resolveDepartmentHeadSupervisor($department);
+        $headUser = $headSupervisor?->user;
+
+        return [
+            'id' => $department->id,
+            'name' => $department->name,
+            'is_active' => $department->is_active,
+            'students_count' => $department->students_count ?? 0,
+            'head' => $headSupervisor !== null
+                && $headUser !== null
+                && $headUser->is_active
+                ? [
+                    'id' => $headSupervisor->id,
+                    'name' => $headUser->name,
+                    'email' => $headUser->email,
+                    'position_title' => $headSupervisor->position_title,
+                    'is_explicit_head' => $headSupervisor->is_department_head,
+                ]
+                : null,
+        ];
+    }
+
+    private function resolveDepartmentHeadSupervisor(Department $department): ?Supervisor
+    {
+        if (! $department->relationLoaded('activeSupervisors')) {
+            $department->load([
+                'activeSupervisors' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->whereHas('user', fn ($userQuery) => $userQuery->where('is_active', true))
+                    ->with('user:id,name,email,is_active')
+                    ->orderByDesc('is_department_head')
+                    ->orderBy('id'),
+            ]);
+        }
+
+        return $department->activeSupervisors->first(
+            fn (Supervisor $supervisor) => $supervisor->user?->is_active,
+        );
     }
 }

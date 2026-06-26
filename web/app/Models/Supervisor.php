@@ -17,6 +17,7 @@ class Supervisor extends Model
         'department_id',
         'position_title',
         'is_active',
+        'is_department_head',
         'evaluation_pending_alerts_seen_at',
     ];
 
@@ -27,6 +28,7 @@ class Supervisor extends Model
     {
         return [
             'is_active' => 'boolean',
+            'is_department_head' => 'boolean',
             'evaluation_pending_alerts_seen_at' => 'datetime',
         ];
     }

@@ -83,6 +83,7 @@ class SupervisorController extends Controller
                     'name' => $supervisor->department->name,
                 ] : null,
                 'position_title' => $supervisor->position_title,
+                'is_department_head' => $supervisor->is_department_head,
                 'students_count' => $this->internCountForSupervisor($supervisor, $section),
                 'is_active' => $supervisor->is_active && $supervisor->user->is_active,
             ])
@@ -122,12 +123,23 @@ class SupervisorController extends Controller
                 'department_id' => $validated['department_id'] ?? null,
                 'position_title' => $validated['position_title'] ?? null,
                 'is_active' => true,
+                'is_department_head' => false,
             ]);
         });
 
         $supervisor = Supervisor::query()
             ->whereHas('user', fn ($query) => $query->where('email', $validated['email']))
             ->firstOrFail();
+
+        $this->syncDepartmentHead(
+            $supervisor,
+            $this->shouldAssignDepartmentHead(
+                $request->boolean('is_department_head'),
+                $validated['department_id'] ?? null,
+                $supervisor->id,
+            ),
+            $validated['department_id'] ?? null,
+        );
 
         if ($sendCredentialsEmail) {
             try {
@@ -184,8 +196,19 @@ class SupervisorController extends Controller
                 'department_id' => $validated['department_id'],
                 'position_title' => $validated['position_title'] ?? null,
                 'is_active' => $isActive,
+                'is_department_head' => false,
             ]);
         });
+
+        $this->syncDepartmentHead(
+            $supervisor->fresh(),
+            $this->shouldAssignDepartmentHead(
+                $request->boolean('is_department_head'),
+                $validated['department_id'] ?? null,
+                $supervisor->id,
+            ),
+            $validated['department_id'] ?? null,
+        );
 
         Inertia::flash('toast', [
             'type' => 'success',
@@ -308,5 +331,68 @@ class SupervisorController extends Controller
         return (clone $studentQuery)
             ->where('supervisor_id', $supervisor->id)
             ->exists();
+    }
+
+    private function syncDepartmentHead(
+        Supervisor $supervisor,
+        bool $isHead,
+        ?int $departmentId = null,
+    ): void {
+        $departmentId ??= $supervisor->department_id;
+
+        if (! $isHead || $departmentId === null) {
+            $supervisor->update(['is_department_head' => false]);
+
+            return;
+        }
+
+        Supervisor::query()
+            ->where('department_id', $departmentId)
+            ->where('id', '!=', $supervisor->id)
+            ->update(['is_department_head' => false]);
+
+        $supervisor->update([
+            'department_id' => $departmentId,
+            'is_department_head' => true,
+        ]);
+    }
+
+    private function shouldAssignDepartmentHead(
+        bool $requested,
+        ?int $departmentId,
+        ?int $ignoreSupervisorId = null,
+    ): bool {
+        if ($departmentId === null) {
+            return false;
+        }
+
+        if ($requested) {
+            return true;
+        }
+
+        $hasExplicitHead = Supervisor::query()
+            ->where('department_id', $departmentId)
+            ->where('is_department_head', true)
+            ->where('is_active', true)
+            ->when(
+                $ignoreSupervisorId !== null,
+                fn ($query) => $query->where('id', '!=', $ignoreSupervisorId),
+            )
+            ->exists();
+
+        if ($hasExplicitHead) {
+            return false;
+        }
+
+        $activeSupervisorCount = Supervisor::query()
+            ->where('department_id', $departmentId)
+            ->where('is_active', true)
+            ->when(
+                $ignoreSupervisorId !== null,
+                fn ($query) => $query->where('id', '!=', $ignoreSupervisorId),
+            )
+            ->count();
+
+        return $activeSupervisorCount === 0;
     }
 }

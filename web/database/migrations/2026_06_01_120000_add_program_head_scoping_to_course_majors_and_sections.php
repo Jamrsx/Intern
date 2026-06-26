@@ -52,6 +52,14 @@ return new class extends Migration
                 );
             });
         }
+
+        if (! Schema::hasColumn('supervisors', 'is_department_head')) {
+            Schema::table('supervisors', function (Blueprint $table) {
+                $table->boolean('is_department_head')
+                    ->default(false)
+                    ->after('is_active');
+            });
+        }
     }
 
     /**
@@ -86,6 +94,12 @@ return new class extends Migration
             Schema::table('course_majors', function (Blueprint $table) {
                 $table->dropUnique(['program_head_user_id']);
                 $table->dropConstrainedForeignId('program_head_user_id');
+            });
+        }
+
+        if (Schema::hasColumn('supervisors', 'is_department_head')) {
+            Schema::table('supervisors', function (Blueprint $table) {
+                $table->dropColumn('is_department_head');
             });
         }
     }

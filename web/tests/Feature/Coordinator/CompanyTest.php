@@ -94,6 +94,85 @@ it('allows a coordinator to manage companies and departments', function () {
     expect($department->fresh()?->is_active)->toBeFalse();
 });
 
+it('shows the assigned department head on the companies page', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['coordinator' => $coordinator, 'course' => $course] = createCoordinatorWithSection();
+
+    $company = Company::query()->create([
+        'course_id' => $course->id,
+        'name' => 'Opol LGU',
+        'is_active' => true,
+    ]);
+
+    $department = Department::query()->create([
+        'company_id' => $company->id,
+        'name' => 'HR',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($coordinator)
+        ->post(route('coordinators.supervisors.store'), [
+            'name' => 'Maria Santos',
+            'email' => 'maria.santos@gmail.com',
+            'company_id' => $company->id,
+            'department_id' => $department->id,
+            'position_title' => 'HR Manager',
+            'is_department_head' => '1',
+            'password' => 'password',
+        ])
+        ->assertRedirect(route('coordinators.supervisors.index'));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.companies.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/companies')
+            ->where('companies.0.departments.0.name', 'HR')
+            ->where('companies.0.departments.0.head.name', 'Maria Santos')
+            ->where('companies.0.departments.0.head.position_title', 'HR Manager'));
+});
+
+it('shows an assigned supervisor as department head even without the explicit head flag', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['coordinator' => $coordinator, 'course' => $course] = createCoordinatorWithSection();
+
+    $company = Company::query()->create([
+        'course_id' => $course->id,
+        'name' => 'Opol LGU',
+        'is_active' => true,
+    ]);
+
+    $department = Department::query()->create([
+        'company_id' => $company->id,
+        'name' => 'IT',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($coordinator)
+        ->post(route('coordinators.supervisors.store'), [
+            'name' => 'IT Head',
+            'email' => 'it.lgu@gmail.com',
+            'company_id' => $company->id,
+            'department_id' => $department->id,
+            'position_title' => 'IT Supervisor',
+            'password' => 'password',
+        ])
+        ->assertRedirect(route('coordinators.supervisors.index'));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.companies.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/companies')
+            ->where('companies.0.departments.0.name', 'IT')
+            ->where('companies.0.departments.0.head.name', 'IT Head')
+            ->where('companies.0.departments.0.head.position_title', 'IT Supervisor'));
+});
+
 it('shares companies across sections in the same course', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);

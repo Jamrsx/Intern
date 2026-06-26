@@ -48,6 +48,7 @@ type SupervisorRow = {
     department_id: number | null;
     department: { id: number; name: string } | null;
     position_title: string | null;
+    is_department_head: boolean;
     students_count: number;
     is_active: boolean;
 };
@@ -180,6 +181,7 @@ export default function CoordinatorSupervisors({
     );
     const [createCompanyId, setCreateCompanyId] = useState('');
     const [createDepartmentId, setCreateDepartmentId] = useState('none');
+    const [createIsDepartmentHead, setCreateIsDepartmentHead] = useState(false);
     const [createPassword, setCreatePassword] = useState('password');
     const [sendCredentialsEmail, setSendCredentialsEmail] = useState(false);
     const [mailingSupervisorId, setMailingSupervisorId] = useState<
@@ -187,6 +189,7 @@ export default function CoordinatorSupervisors({
     >(null);
     const [editCompanyId, setEditCompanyId] = useState('');
     const [editDepartmentId, setEditDepartmentId] = useState('none');
+    const [editIsDepartmentHead, setEditIsDepartmentHead] = useState(false);
     const [openGroups, setOpenGroups] = useState<Record<number, boolean>>({});
     const [hasLoadedGroupState, setHasLoadedGroupState] = useState(false);
 
@@ -284,6 +287,7 @@ export default function CoordinatorSupervisors({
     const openCreateModal = () => {
         setCreateCompanyId(String(companies[0]?.id ?? ''));
         setCreateDepartmentId('none');
+        setCreateIsDepartmentHead(false);
         setCreatePassword('password');
         setSendCredentialsEmail(false);
         setCreateOpen(true);
@@ -295,6 +299,7 @@ export default function CoordinatorSupervisors({
         setEditDepartmentId(
             supervisor.department_id ? String(supervisor.department_id) : 'none',
         );
+        setEditIsDepartmentHead(supervisor.is_department_head);
     };
 
     const handleDeactivate = (supervisor: SupervisorRow) => {
@@ -479,6 +484,11 @@ export default function CoordinatorSupervisors({
                                                                         {
                                                                             supervisor.name
                                                                         }
+                                                                        {supervisor.is_department_head && (
+                                                                            <Badge className="ml-2 bg-brand text-brand-foreground hover:bg-brand">
+                                                                                Dept. head
+                                                                            </Badge>
+                                                                        )}
                                                                     </div>
                                                                     <div className="text-xs text-muted-foreground">
                                                                         {
@@ -631,12 +641,43 @@ export default function CoordinatorSupervisors({
                                     <DepartmentSelect
                                         departments={createDepartments}
                                         value={createDepartmentId}
-                                        onChange={setCreateDepartmentId}
+                                        onChange={(value) => {
+                                            setCreateDepartmentId(value);
+                                            if (value === 'none') {
+                                                setCreateIsDepartmentHead(false);
+                                            }
+                                        }}
                                     />
                                     <InputError
                                         message={errors.department_id}
                                     />
                                 </div>
+
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="hidden"
+                                        name="is_department_head"
+                                        value="0"
+                                    />
+                                    <Checkbox
+                                        id="create-is-department-head"
+                                        name="is_department_head"
+                                        value="1"
+                                        checked={createIsDepartmentHead}
+                                        disabled={createDepartmentId === 'none'}
+                                        onCheckedChange={(checked) =>
+                                            setCreateIsDepartmentHead(
+                                                checked === true,
+                                            )
+                                        }
+                                    />
+                                    <Label htmlFor="create-is-department-head">
+                                        Department head for this department
+                                    </Label>
+                                </div>
+                                <InputError
+                                    message={errors.is_department_head}
+                                />
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="create-position-title">
@@ -805,12 +846,43 @@ export default function CoordinatorSupervisors({
                                     <DepartmentSelect
                                         departments={editDepartments}
                                         value={editDepartmentId}
-                                        onChange={setEditDepartmentId}
+                                        onChange={(value) => {
+                                            setEditDepartmentId(value);
+                                            if (value === 'none') {
+                                                setEditIsDepartmentHead(false);
+                                            }
+                                        }}
                                     />
                                     <InputError
                                         message={errors.department_id}
                                     />
                                 </div>
+
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="hidden"
+                                        name="is_department_head"
+                                        value="0"
+                                    />
+                                    <Checkbox
+                                        id="edit-is-department-head"
+                                        name="is_department_head"
+                                        value="1"
+                                        checked={editIsDepartmentHead}
+                                        disabled={editDepartmentId === 'none'}
+                                        onCheckedChange={(checked) =>
+                                            setEditIsDepartmentHead(
+                                                checked === true,
+                                            )
+                                        }
+                                    />
+                                    <Label htmlFor="edit-is-department-head">
+                                        Department head for this department
+                                    </Label>
+                                </div>
+                                <InputError
+                                    message={errors.is_department_head}
+                                />
 
                                 <div className="grid gap-2">
                                     <Label htmlFor="edit-position-title">

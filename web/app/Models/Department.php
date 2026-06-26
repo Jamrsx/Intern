@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Department extends Model
 {
@@ -41,6 +42,27 @@ class Department extends Model
     public function supervisors(): HasMany
     {
         return $this->hasMany(Supervisor::class);
+    }
+
+    /**
+     * @return HasOne<Supervisor, $this>
+     */
+    public function headSupervisor(): HasOne
+    {
+        return $this->hasOne(Supervisor::class)
+            ->where('is_department_head', true)
+            ->where('is_active', true);
+    }
+
+    /**
+     * @return HasMany<Supervisor, $this>
+     */
+    public function activeSupervisors(): HasMany
+    {
+        return $this->hasMany(Supervisor::class)
+            ->where('is_active', true)
+            ->orderByDesc('is_department_head')
+            ->orderBy('id');
     }
 
     /**

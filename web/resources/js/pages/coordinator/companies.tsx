@@ -30,11 +30,19 @@ import {
     update as updateDepartment,
 } from '@/routes/coordinators/companies/departments';
 
+type DepartmentHead = {
+    id: number;
+    name: string;
+    email: string;
+    position_title: string | null;
+};
+
 type DepartmentRow = {
     id: number;
     name: string;
     is_active: boolean;
     students_count: number;
+    head: DepartmentHead | null;
 };
 
 type CompanyRow = {
@@ -132,6 +140,13 @@ export default function CoordinatorCompanies({
         section,
         count: companies.length,
         deactivated_count,
+        departmentHeads: companies.flatMap((company) =>
+            company.departments.map((department) => ({
+                company: company.name,
+                department: department.name,
+                head: department.head?.name ?? null,
+            })),
+        ),
     });
 
     const isGroupOpen = (companyId: number) => {
@@ -380,6 +395,9 @@ export default function CoordinatorCompanies({
                                                                 Department
                                                             </th>
                                                             <th className="px-4 py-3 font-medium">
+                                                                Department head
+                                                            </th>
+                                                            <th className="px-4 py-3 font-medium">
                                                                 Interns
                                                             </th>
                                                             <th className="px-4 py-3 font-medium">
@@ -395,7 +413,7 @@ export default function CoordinatorCompanies({
                                                             .length === 0 ? (
                                                             <tr>
                                                                 <td
-                                                                    colSpan={4}
+                                                                    colSpan={5}
                                                                     className="px-4 py-6 text-center text-muted-foreground"
                                                                 >
                                                                     No
@@ -416,6 +434,31 @@ export default function CoordinatorCompanies({
                                                                             {
                                                                                 department.name
                                                                             }
+                                                                        </td>
+                                                                        <td className="px-4 py-3">
+                                                                            {department.head ? (
+                                                                                <div>
+                                                                                    <div className="font-medium">
+                                                                                        {
+                                                                                            department
+                                                                                                .head
+                                                                                                .name
+                                                                                        }
+                                                                                    </div>
+                                                                                    <div className="text-xs text-muted-foreground">
+                                                                                        {department
+                                                                                            .head
+                                                                                            .position_title ??
+                                                                                            department
+                                                                                                .head
+                                                                                                .email}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <span className="text-amber-600">
+                                                                                    Unassigned
+                                                                                </span>
+                                                                            )}
                                                                         </td>
                                                                         <td className="px-4 py-3 text-muted-foreground">
                                                                             {

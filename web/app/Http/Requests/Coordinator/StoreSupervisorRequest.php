@@ -44,6 +44,7 @@ class StoreSupervisorRequest extends FormRequest
                 }),
             ],
             'position_title' => ['nullable', 'string', 'max:100'],
+            'is_department_head' => ['sometimes', 'boolean'],
             'password' => [
                 Rule::requiredIf(fn () => ! $this->boolean('send_credentials_email')),
                 'nullable',
@@ -63,6 +64,22 @@ class StoreSupervisorRequest extends FormRequest
         return [
             'email.unique' => 'This email is already registered.',
             'department_id.exists' => 'Please select a valid department for the chosen company.',
+            'is_department_head' => 'Select a department before marking this supervisor as department head.',
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            if (
+                $this->boolean('is_department_head')
+                && empty($this->input('department_id'))
+            ) {
+                $validator->errors()->add(
+                    'is_department_head',
+                    'Select a department before marking this supervisor as department head.',
+                );
+            }
+        });
     }
 }
