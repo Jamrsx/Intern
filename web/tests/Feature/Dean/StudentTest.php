@@ -56,6 +56,7 @@ it('allows a dean to create and update students', function () {
     expect($student?->student_number)->toBe('2022-1-04311');
     expect($student?->fullName())->toBe('John Michael Doe');
     expect($student?->section_id)->toBe($section->id);
+    expect(Hash::check('password', (string) $student?->user?->password))->toBeTrue();
 
     $this->actingAs($dean)
         ->post(route('deans.students.bulk-store'), [
@@ -294,11 +295,13 @@ it('allows a dean to email student credentials individually and in bulk', functi
 
     Mail::assertSent(StudentAccountCredentialsMail::class, function (StudentAccountCredentialsMail $mail) use ($studentOne) {
         return $mail->hasTo($studentOne->user->email)
-            && $mail->student->is($studentOne);
+            && $mail->student->is($studentOne)
+            && $mail->plainPassword === 'password';
     });
 
     expect($studentOne->fresh()?->user?->password)->not->toBe($originalPasswordHash);
     expect(Hash::check('old-password', (string) $studentOne->fresh()?->user?->password))->toBeFalse();
+    expect(Hash::check('password', (string) $studentOne->fresh()?->user?->password))->toBeTrue();
 
     Mail::fake();
 

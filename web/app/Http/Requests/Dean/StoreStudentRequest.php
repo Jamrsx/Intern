@@ -43,6 +43,7 @@ class StoreStudentRequest extends FormRequest
                 'integer',
                 Rule::in($scopedSectionIds->all()),
             ],
+            'password' => ['nullable', 'string', 'min:8', 'max:255'],
         ];
     }
 

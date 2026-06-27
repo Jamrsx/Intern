@@ -30,6 +30,8 @@ class StudentController extends Controller
 {
     use ResolvesDeanScope;
 
+    private const DEFAULT_STUDENT_PASSWORD = 'password';
+
     public function index(Request $request): Response
     {
         $course = $this->deanCourse($request);
@@ -108,7 +110,7 @@ class StudentController extends Controller
 
         $createdSectionCount = count($createdSectionNames);
 
-        $message = "{$createdCount} student account(s) created. Default passwords were generated for each account.";
+        $message = "{$createdCount} student account(s) created. Default password is \"".self::DEFAULT_STUDENT_PASSWORD.'" for each account.';
 
         if ($createdSectionCount > 0) {
             $message .= " {$createdSectionCount} new section(s) were created from the import.";
@@ -292,7 +294,7 @@ class StudentController extends Controller
     private function createStudent(array $data): array
     {
         $internRoleId = Role::query()->where('name', 'intern')->valueOrFail('id');
-        $password = Str::password(10);
+        $password = $data['password'] ?? self::DEFAULT_STUDENT_PASSWORD;
 
         $user = User::query()->create([
             'name' => $this->fullName(
@@ -422,7 +424,7 @@ class StudentController extends Controller
     {
         $student->loadMissing('user');
 
-        $password = Str::password(10);
+        $password = self::DEFAULT_STUDENT_PASSWORD;
 
         $student->user->update([
             'password' => $password,

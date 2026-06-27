@@ -2,6 +2,7 @@ import { Form, Head, Link, router } from '@inertiajs/react';
 import { ChevronDown, Download, FileSpreadsheet, Mail, Pencil, Plus, Search, Upload, Users } from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import InputError from '@/components/input-error';
+import PasswordInput from '@/components/password-input';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { PageHeader } from '@/components/superadmin/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -112,6 +113,7 @@ type Props = {
 };
 
 const STUDENT_GROUP_STATE_KEY = 'dean-students-group-state';
+const DEFAULT_STUDENT_PASSWORD = 'password';
 
 function readStoredStudentGroupState(): Record<number, boolean> {
     if (typeof window === 'undefined') {
@@ -389,6 +391,7 @@ export default function DeanStudents({
     const [editStudent, setEditStudent] = useState<StudentRow | null>(null);
     const [createSectionId, setCreateSectionId] = useState('');
     const [createSectionLocked, setCreateSectionLocked] = useState(false);
+    const [createPassword, setCreatePassword] = useState(DEFAULT_STUDENT_PASSWORD);
     const [editSectionId, setEditSectionId] = useState('');
     const [editCompanyId, setEditCompanyId] = useState('none');
     const [editDepartmentId, setEditDepartmentId] = useState('none');
@@ -445,6 +448,7 @@ export default function DeanStudents({
             setCreateSectionLocked(false);
         }
 
+        setCreatePassword(DEFAULT_STUDENT_PASSWORD);
         setCreateOpen(true);
 
         console.log('Dean open create student modal', {
@@ -458,6 +462,7 @@ export default function DeanStudents({
 
         if (!open) {
             setCreateSectionLocked(false);
+            setCreatePassword(DEFAULT_STUDENT_PASSWORD);
         }
     };
 
@@ -654,7 +659,7 @@ export default function DeanStudents({
     const handleMailStudent = (student: StudentRow) => {
         if (
             !confirm(
-                `Send login credentials to ${student.full_name}? This will reset their password.`,
+                `Send login credentials to ${student.full_name}? Their password will be reset to "${DEFAULT_STUDENT_PASSWORD}" and emailed.`,
             )
         ) {
             return;
@@ -679,7 +684,7 @@ export default function DeanStudents({
 
         if (
             !confirm(
-                `Send login credentials to all ${activeStudentsCount} active student(s)? This will reset each student's password.`,
+                `Send login credentials to all ${activeStudentsCount} active student(s)? Each password will be reset to "${DEFAULT_STUDENT_PASSWORD}" and emailed.`,
             )
         ) {
             return;
@@ -1078,6 +1083,27 @@ export default function DeanStudents({
                                         placeholder="student@gmail.com"
                                     />
                                     <InputError message={errors.email} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="create-password">
+                                        Default password
+                                    </Label>
+                                    <PasswordInput
+                                        id="create-password"
+                                        name="password"
+                                        value={createPassword}
+                                        onChange={(event) =>
+                                            setCreatePassword(event.target.value)
+                                        }
+                                        required
+                                        minLength={8}
+                                        autoComplete="new-password"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Defaults to &quot;{DEFAULT_STUDENT_PASSWORD}&quot;.
+                                        You can email credentials to the student later from this page.
+                                    </p>
+                                    <InputError message={errors.password} />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label>Section</Label>
