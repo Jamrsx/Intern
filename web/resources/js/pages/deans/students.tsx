@@ -1,5 +1,16 @@
 import { Form, Head, Link, router } from '@inertiajs/react';
-import { ChevronDown, Download, FileSpreadsheet, Mail, Pencil, Plus, Search, Upload, Users } from 'lucide-react';
+import {
+    ChevronDown,
+    Download,
+    FileSpreadsheet,
+    Mail,
+    Pencil,
+    Plus,
+    Search,
+    Trash2,
+    Upload,
+    Users,
+} from 'lucide-react';
 import { useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
@@ -483,6 +494,19 @@ export default function DeanStudents({
         }
 
         downloadStudentImportTemplate(course.code, sections);
+    };
+
+    const handleRemoveBulkImportRow = (index: number) => {
+        setBulkImportRows((current) => {
+            const next = current.filter((_, rowIndex) => rowIndex !== index);
+
+            console.log('Dean bulk import row removed', {
+                removedIndex: index,
+                remainingRows: next.length,
+            });
+
+            return next;
+        });
     };
 
     const handleBulkImportFile = async (
@@ -1308,6 +1332,9 @@ export default function DeanStudents({
                                                         <th className="px-3 py-2 font-medium">
                                                             Status
                                                         </th>
+                                                        <th className="px-3 py-2 text-right font-medium">
+                                                            Actions
+                                                        </th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -1467,6 +1494,24 @@ export default function DeanStudents({
                                                                             Ready
                                                                         </span>
                                                                     )}
+                                                                </td>
+                                                                <td className="px-3 py-2 align-top">
+                                                                    <div className="flex justify-end">
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            className="text-red-600 hover:text-red-700"
+                                                                            title="Remove from import"
+                                                                            onClick={() =>
+                                                                                handleRemoveBulkImportRow(
+                                                                                    index,
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <Trash2 className="size-3.5" />
+                                                                        </Button>
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         ),
