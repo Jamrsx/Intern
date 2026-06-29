@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers\Dean;
 
+use App\Http\Controllers\Concerns\ResolvesDeanPortalPresentation;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Support\DeanPortalScope;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Inertia\Response;
 
 class DashboardController extends Controller
 {
+    use ResolvesDeanPortalPresentation;
     use ResolvesDeanScope;
 
     public function index(Request $request): Response
@@ -24,7 +25,7 @@ class DashboardController extends Controller
             $studentsCount = (int) DeanPortalScope::studentsQuery($user)->count();
         }
 
-        return Inertia::render('deans/dashboard', [
+        return $this->deanPortalRender('dashboard', [
             'course' => $courseContext,
             'stats' => [
                 'students' => $studentsCount,

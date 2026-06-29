@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dean;
 
+use App\Http\Controllers\Concerns\ResolvesDeanPortalPresentation;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\StoreSchoolYearRequest;
@@ -18,6 +19,7 @@ use Inertia\Response;
 
 class SchoolYearController extends Controller
 {
+    use ResolvesDeanPortalPresentation;
     use ResolvesDeanScope;
 
     public function __construct(
@@ -52,7 +54,7 @@ class SchoolYearController extends Controller
                 'created_at' => $schoolYear->created_at?->toIso8601String(),
             ]);
 
-        return Inertia::render('deans/school-years', [
+        return $this->deanPortalRender('school-years', [
             'course' => $this->deanPortalContextPayload($request),
             'schoolYears' => $schoolYears,
         ]);
@@ -88,7 +90,7 @@ class SchoolYearController extends Controller
             'message' => 'School year created successfully.',
         ]);
 
-        return redirect()->route('deans.school-years.index');
+        return $this->deanPortalRedirect('school-years.index');
     }
 
     public function update(UpdateSchoolYearRequest $request, SchoolYear $schoolYear): RedirectResponse
@@ -141,7 +143,7 @@ class SchoolYearController extends Controller
             'message' => $message,
         ]);
 
-        return redirect()->route('deans.school-years.index');
+        return $this->deanPortalRedirect('school-years.index');
     }
 
     public function activate(SchoolYear $schoolYear): RedirectResponse
@@ -176,7 +178,7 @@ class SchoolYearController extends Controller
             'message' => $message,
         ]);
 
-        return redirect()->route('deans.school-years.index');
+        return $this->deanPortalRedirect('school-years.index');
     }
 
     public function destroy(Request $request, SchoolYear $schoolYear): RedirectResponse
@@ -199,7 +201,7 @@ class SchoolYearController extends Controller
             'message' => $message,
         ]);
 
-        return redirect()->route('deans.school-years.index');
+        return $this->deanPortalRedirect('school-years.index');
     }
 
     public function archive(Request $request): Response
@@ -270,7 +272,7 @@ class SchoolYearController extends Controller
             ])
             ->values();
 
-        return Inertia::render('deans/school-years/archive', [
+        return $this->deanPortalRender('school-years/archive', [
             'course' => $this->deanPortalContextPayload($request),
             'archivedSchoolYears' => $archivedSchoolYears,
         ]);

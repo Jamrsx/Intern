@@ -24,13 +24,8 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
-import {
-    destroy,
-    index as sectionsIndex,
-    store,
-    update,
-} from '@/routes/deans/sections';
-import { index as schoolYearsIndex } from '@/routes/deans/school-years';
+import { DeanPortalRoutesProvider, useDeanPortalRoutes } from '@/contexts/dean-portal-routes-context';
+import { deanPortalRoutes } from '@/lib/dean-portal-routes';
 
 type CourseMajor = {
     id: number;
@@ -179,12 +174,14 @@ function MajorSelect({
     );
 }
 
-export default function DeanSections({
+export function DeanSectionsPage({
     course,
     majors,
     schoolYears,
     sections,
 }: Props) {
+    const portalRoutes = useDeanPortalRoutes();
+    const isReadOnly = portalRoutes.readOnly;
     const [createOpen, setCreateOpen] = useState(false);
     const [editSection, setEditSection] = useState<Section | null>(null);
     const [filterSchoolYearId, setFilterSchoolYearId] = useState('all');
@@ -201,7 +198,7 @@ export default function DeanSections({
         console.log('Dean sections group state restored', storedState);
     }, []);
 
-    const storeRoute = store();
+    const storeRoute = portalRoutes.sections.store();
 
     const activeSchoolYearId = useMemo(
         () => schoolYears.find((sy) => sy.is_active)?.id ?? schoolYears[0]?.id,
@@ -273,7 +270,7 @@ export default function DeanSections({
             return;
         }
 
-        router.delete(destroy(section.id).url, {
+        router.delete(portalRoutes.sections.destroy(section.id).url, {
             preserveScroll: true,
         });
     };
@@ -317,7 +314,7 @@ export default function DeanSections({
         });
     };
 
-    const canAddSection = course !== null && schoolYears.length > 0;
+    const canAddSection = course !== null && schoolYears.length > 0 && !isReadOnly;
 
     return (
         <>
@@ -328,11 +325,13 @@ export default function DeanSections({
                     title="Sections"
                     description={
                         course
-                            ? `Create sections for ${course.code} and assign them to a school year.`
+                            ? isReadOnly
+                                ? `View sections for ${course.major?.display_name ?? course.code}.`
+                                : `Create sections for ${course.code} and assign them to a school year.`
                             : 'You need an assigned course before you can manage sections.'
                     }
                     icon={ListChecks}
-                    badgeText={isProgramHead ? 'Program Head' : 'Dean'}
+                    badgeText={portalRoutes.badgeText}
                     action={
                         canAddSection ? (
                             <Button
@@ -355,12 +354,20 @@ export default function DeanSections({
                     </Card>
                 )}
 
-                {course && schoolYears.length === 0 && (
+                {course && schoolYears.length === 0 && isReadOnly && (
+                    <Card className="border-sidebar-border/70">
+                        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                            No active school year is available to display sections yet.
+                        </CardContent>
+                    </Card>
+                )}
+
+                {course && schoolYears.length === 0 && !isReadOnly && (
                     <Card className="border-sidebar-border/70">
                         <CardContent className="py-8 text-center text-sm text-muted-foreground">
                             No active school year found.{' '}
                             <Link
-                                href={schoolYearsIndex().url}
+                                href={portalRoutes.schoolYears.index().url}
                                 className="text-brand underline-offset-4 hover:underline"
                             >
                                 Go to School Years and set one as active
@@ -387,8 +394,9 @@ export default function DeanSections({
                     <div className="space-y-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <p className="text-sm text-muted-foreground">
-                                Sections grouped by school year. Expand a group
-                                to view or manage sections.
+                                {isReadOnly
+                                    ? 'Sections grouped by school year. Expand a group to view section details.'
+                                    : 'Sections grouped by school year. Expand a group to view or manage sections.'}
                             </p>
                             <div className="w-full sm:w-64">
                                 <Label
@@ -503,9 +511,11 @@ export default function DeanSections({
                                                                 <th className="px-4 py-3 font-medium">
                                                                     Status
                                                                 </th>
-                                                                <th className="px-4 py-3 text-right font-medium">
-                                                                    Actions
-                                                                </th>
+                                                                {!isReadOnly ? (
+                                                                    <th className="px-4 py-3 text-right font-medium">
+                                                                        Actions
+                                                                    </th>
+                                                                ) : null}
                                                             </tr>
                                                         </thead>
                                                         <tbody>
@@ -556,37 +566,39 @@ export default function DeanSections({
                                                                                     : 'Inactive'}
                                                                             </Badge>
                                                                         </td>
-                                                                        <td className="px-4 py-3">
-                                                                            <div className="flex justify-end gap-2">
-                                                                                <Button
-                                                                                    variant="outline"
-                                                                                    size="sm"
-                                                                                    onClick={() =>
-                                                                                        openEditModal(
-                                                                                            section,
-                                                                                        )
-                                                                                    }
-                                                                                >
-                                                                                    <Pencil className="size-3.5" />
-                                                                                </Button>
-                                                                                {section.is_active &&
-                                                                                    section.students_count ===
-                                                                                        0 && (
-                                                                                        <Button
-                                                                                            variant="outline"
-                                                                                            size="sm"
-                                                                                            className="text-red-600 hover:text-red-700"
-                                                                                            onClick={() =>
-                                                                                                handleDeactivate(
-                                                                                                    section,
-                                                                                                )
-                                                                                            }
-                                                                                        >
-                                                                                            Deactivate
-                                                                                        </Button>
-                                                                                    )}
-                                                                            </div>
-                                                                        </td>
+                                                                        {!isReadOnly ? (
+                                                                            <td className="px-4 py-3">
+                                                                                <div className="flex justify-end gap-2">
+                                                                                    <Button
+                                                                                        variant="outline"
+                                                                                        size="sm"
+                                                                                        onClick={() =>
+                                                                                            openEditModal(
+                                                                                                section,
+                                                                                            )
+                                                                                        }
+                                                                                    >
+                                                                                        <Pencil className="size-3.5" />
+                                                                                    </Button>
+                                                                                    {section.is_active &&
+                                                                                        section.students_count ===
+                                                                                            0 && (
+                                                                                            <Button
+                                                                                                variant="outline"
+                                                                                                size="sm"
+                                                                                                className="text-red-600 hover:text-red-700"
+                                                                                                onClick={() =>
+                                                                                                    handleDeactivate(
+                                                                                                        section,
+                                                                                                    )
+                                                                                                }
+                                                                                            >
+                                                                                                Deactivate
+                                                                                            </Button>
+                                                                                        )}
+                                                                                </div>
+                                                                            </td>
+                                                                        ) : null}
                                                                     </tr>
                                                                 ),
                                                             )}
@@ -603,7 +615,7 @@ export default function DeanSections({
                 )}
             </div>
 
-            {course && (
+            {course && !isReadOnly && (
                 <AppModal
                     open={createOpen}
                     onOpenChange={setCreateOpen}
@@ -718,7 +730,7 @@ export default function DeanSections({
                 </AppModal>
             )}
 
-            {editSection && course && (
+            {editSection && course && !isReadOnly && (
                 <AppModal
                     open={!!editSection}
                     onOpenChange={(open) => !open && setEditSection(null)}
@@ -726,8 +738,8 @@ export default function DeanSections({
                     description={`Update ${editSection.display_name}`}
                 >
                     <Form
-                        action={update(editSection.id).url}
-                        method={update(editSection.id).method}
+                        action={portalRoutes.sections.update(editSection.id).url}
+                        method={portalRoutes.sections.update(editSection.id).method}
                         onSuccess={() => setEditSection(null)}
                         className="space-y-4"
                     >
@@ -816,6 +828,14 @@ export default function DeanSections({
     );
 }
 
+export default function DeanSections(props: Props) {
+    return (
+        <DeanPortalRoutesProvider value={deanPortalRoutes}>
+            <DeanSectionsPage {...props} />
+        </DeanPortalRoutesProvider>
+    );
+}
+
 DeanSections.layout = {
-    breadcrumbs: [{ title: 'Sections', href: sectionsIndex().url }],
+    breadcrumbs: [{ title: 'Sections', href: deanPortalRoutes.sections.index().url }],
 };

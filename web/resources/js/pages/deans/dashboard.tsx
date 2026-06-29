@@ -55,7 +55,7 @@ export default function DeanDashboard() {
                     </h1>
                     <p className="mt-1 text-sm text-brand-foreground/80">
                         {isProgramHead
-                            ? `Manage students, sections, and coordinators for ${scopeLabel}.`
+                            ? `View students, sections, and coordinators for ${scopeLabel}.`
                             : 'Manage students, sections, coordinators, and school years for your assigned course.'}
                     </p>
                 </div>

@@ -41,13 +41,21 @@ import {
     parseStudentImportFile,
     type BulkImportRow,
 } from '@/lib/dean-student-import';
-import { bulkStore, destroy, index as studentsIndex, mailAllCredentials, mailCredentials, store, update } from '@/routes/deans/students';
-import { index as sectionsIndex } from '@/routes/deans/sections';
+import { DeanPortalRoutesProvider } from '@/contexts/dean-portal-routes-context';
+import { useDeanPortalRoutes } from '@/contexts/dean-portal-routes-context';
+import { deanPortalRoutes } from '@/lib/dean-portal-routes';
 
 type Course = {
     id: number;
     code: string;
     name: string;
+    portal_role?: 'dean' | 'program_head';
+    major?: {
+        id: number;
+        code: string | null;
+        name: string;
+        display_name: string;
+    } | null;
 };
 
 type SectionOption = {
@@ -162,12 +170,14 @@ function StudentGroupTable({
     onDeactivate,
     onMail,
     mailingStudentId,
+    readOnly = false,
 }: {
     students: StudentRow[];
     onEdit: (student: StudentRow) => void;
     onDeactivate: (student: StudentRow) => void;
     onMail: (student: StudentRow) => void;
     mailingStudentId: number | null;
+    readOnly?: boolean;
 }) {
     return (
         <div className="overflow-x-auto">
@@ -181,9 +191,11 @@ function StudentGroupTable({
                         <th className="px-4 py-3 font-medium">OJT Company</th>
                         <th className="px-4 py-3 font-medium">Supervisor</th>
                         <th className="px-4 py-3 font-medium">Status</th>
-                        <th className="px-4 py-3 text-right font-medium">
-                            Actions
-                        </th>
+                        {!readOnly ? (
+                            <th className="px-4 py-3 text-right font-medium">
+                                Actions
+                            </th>
+                        ) : null}
                     </tr>
                 </thead>
                 <tbody>
@@ -259,46 +271,48 @@ function StudentGroupTable({
                                     {student.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
                             </td>
-                            <td className="px-4 py-3">
-                                <div className="flex justify-end gap-2">
-                                    {student.is_active && (
+                            {!readOnly ? (
+                                <td className="px-4 py-3">
+                                    <div className="flex justify-end gap-2">
+                                        {student.is_active && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                title="Email login credentials"
+                                                disabled={
+                                                    mailingStudentId === student.id
+                                                }
+                                                onClick={() => onMail(student)}
+                                            >
+                                                {mailingStudentId === student.id ? (
+                                                    <Spinner className="size-3.5" />
+                                                ) : (
+                                                    <Mail className="size-3.5" />
+                                                )}
+                                            </Button>
+                                        )}
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            title="Email login credentials"
-                                            disabled={
-                                                mailingStudentId === student.id
-                                            }
-                                            onClick={() => onMail(student)}
+                                            onClick={() => onEdit(student)}
                                         >
-                                            {mailingStudentId === student.id ? (
-                                                <Spinner className="size-3.5" />
-                                            ) : (
-                                                <Mail className="size-3.5" />
-                                            )}
+                                            <Pencil className="size-3.5" />
                                         </Button>
-                                    )}
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => onEdit(student)}
-                                    >
-                                        <Pencil className="size-3.5" />
-                                    </Button>
-                                    {student.is_active && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="text-red-600 hover:text-red-700"
-                                            onClick={() =>
-                                                onDeactivate(student)
-                                            }
-                                        >
-                                            Deactivate
-                                        </Button>
-                                    )}
-                                </div>
-                            </td>
+                                        {student.is_active && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-red-600 hover:text-red-700"
+                                                onClick={() =>
+                                                    onDeactivate(student)
+                                                }
+                                            >
+                                                Deactivate
+                                            </Button>
+                                        )}
+                                    </div>
+                                </td>
+                            ) : null}
                         </tr>
                     ))}
                 </tbody>
@@ -390,13 +404,16 @@ function SectionSelect({
     );
 }
 
-export default function DeanStudents({
+export function DeanStudentsPage({
     course,
     sections,
     students,
     companies,
     supervisors,
 }: Props) {
+    const portalRoutes = useDeanPortalRoutes();
+    const isProgramHead = course?.portal_role === 'program_head';
+    const isReadOnly = portalRoutes.readOnly;
     const [createOpen, setCreateOpen] = useState(false);
     const [bulkOpen, setBulkOpen] = useState(false);
     const [editStudent, setEditStudent] = useState<StudentRow | null>(null);
@@ -427,8 +444,8 @@ export default function DeanStudents({
         console.log('Dean students group state restored', storedState);
     }, []);
 
-    const storeRoute = store();
-    const bulkStoreRoute = bulkStore();
+    const storeRoute = portalRoutes.students.store();
+    const bulkStoreRoute = portalRoutes.students.bulkStore();
     const bulkImportHasErrors = bulkImportRows.some(
         (row) => row.errors.length > 0,
     );
@@ -656,7 +673,7 @@ export default function DeanStudents({
             return;
         }
 
-        router.delete(destroy(student.id).url, { preserveScroll: true });
+        router.delete(portalRoutes.students.destroy(student.id).url, { preserveScroll: true });
     };
 
     const openEditModal = (student: StudentRow) => {
@@ -678,7 +695,7 @@ export default function DeanStudents({
         () => students.filter((student) => student.is_active).length,
         [students],
     );
-    const mailAllRoute = mailAllCredentials();
+    const mailAllRoute = portalRoutes.students.mailAllCredentials();
 
     const handleMailStudent = (student: StudentRow) => {
         if (
@@ -695,7 +712,7 @@ export default function DeanStudents({
         });
 
         setMailingStudentId(student.id);
-        router.post(mailCredentials(student.id).url, {}, {
+        router.post(portalRoutes.students.mailCredentials(student.id).url, {}, {
             preserveScroll: true,
             onFinish: () => setMailingStudentId(null),
         });
@@ -734,13 +751,17 @@ export default function DeanStudents({
                     title="Students"
                     description={
                         course
-                            ? `Create intern accounts for ${course.code} and assign them to sections.`
+                            ? isReadOnly
+                                ? `View students, sections, and coordinators for ${course.major?.display_name ?? course.code}.`
+                                : isProgramHead
+                                    ? `Create intern accounts for ${course.major?.display_name ?? course.code} and assign them to sections in your program.`
+                                    : `Create intern accounts for ${course.code} and assign them to sections.`
                             : 'You need an assigned course before you can manage students.'
                     }
                     icon={Users}
-                    badgeText="Dean"
+                    badgeText={portalRoutes.badgeText}
                     action={
-                        canManageStudents ? (
+                        canManageStudents && !isReadOnly ? (
                             <div className="flex flex-wrap gap-2">
                                 {students.length > 0 && (
                                     <Button
@@ -791,7 +812,7 @@ export default function DeanStudents({
                         <CardContent className="py-8 text-center text-sm text-muted-foreground">
                             No active sections found.{' '}
                             <Link
-                                href={sectionsIndex().url}
+                                href={portalRoutes.sections.index().url}
                                 className="text-brand underline-offset-4 hover:underline"
                             >
                                 Create a section first
@@ -860,9 +881,9 @@ export default function DeanStudents({
                         </div>
 
                         <p className="text-sm text-muted-foreground">
-                            Students grouped by section. Expand a section to
-                            view or manage its interns. Empty sections are
-                            shown so you can add students directly.
+                            {isReadOnly
+                                ? 'Students grouped by section. Expand a section to view its interns and assigned coordinator.'
+                                : 'Students grouped by section. Expand a section to view or manage its interns. Empty sections are shown so you can add students directly.'}
                             {searchQuery.trim() !== '' && (
                                 <>
                                     {' '}
@@ -964,20 +985,22 @@ export default function DeanStudents({
                                                     />
                                                 </button>
                                             </CollapsibleTrigger>
-                                            <Button
-                                                type="button"
-                                                size="sm"
-                                                variant="outline"
-                                                className="shrink-0"
-                                                onClick={() =>
-                                                    openCreateStudentModal(
-                                                        group.sectionId,
-                                                    )
-                                                }
-                                            >
-                                                <Plus className="mr-1 size-3.5" />
-                                                Add Student
-                                            </Button>
+                                            {!isReadOnly ? (
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="shrink-0"
+                                                    onClick={() =>
+                                                        openCreateStudentModal(
+                                                            group.sectionId,
+                                                        )
+                                                    }
+                                                >
+                                                    <Plus className="mr-1 size-3.5" />
+                                                    Add Student
+                                                </Button>
+                                            ) : null}
                                         </div>
 
                                         <CollapsibleContent>
@@ -985,21 +1008,23 @@ export default function DeanStudents({
                                                 {group.students.length === 0 ? (
                                                     <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                                                         No students in this section yet.
-                                                        <div className="mt-4">
-                                                            <Button
-                                                                type="button"
-                                                                size="sm"
-                                                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                                                                onClick={() =>
-                                                                    openCreateStudentModal(
-                                                                        group.sectionId,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Plus className="mr-1 size-3.5" />
-                                                                Add Student
-                                                            </Button>
-                                                        </div>
+                                                        {!isReadOnly ? (
+                                                            <div className="mt-4">
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                                                                    onClick={() =>
+                                                                        openCreateStudentModal(
+                                                                            group.sectionId,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Plus className="mr-1 size-3.5" />
+                                                                    Add Student
+                                                                </Button>
+                                                            </div>
+                                                        ) : null}
                                                     </div>
                                                 ) : (
                                                     <StudentGroupTable
@@ -1012,6 +1037,7 @@ export default function DeanStudents({
                                                         mailingStudentId={
                                                             mailingStudentId
                                                         }
+                                                        readOnly={isReadOnly}
                                                     />
                                                 )}
                                             </div>
@@ -1024,7 +1050,7 @@ export default function DeanStudents({
                 )}
             </div>
 
-            {course && (
+            {course && !isReadOnly && (
                 <AppModal
                     open={createOpen}
                     onOpenChange={handleCreateModalChange}
@@ -1164,7 +1190,7 @@ export default function DeanStudents({
                 </AppModal>
             )}
 
-            {course && (
+            {course && !isReadOnly && (
                 <AppModal
                     open={bulkOpen}
                     onOpenChange={(open) => {
@@ -1558,7 +1584,7 @@ export default function DeanStudents({
                 </AppModal>
             )}
 
-            {editStudent && course && (
+            {editStudent && course && !isReadOnly && (
                 <AppModal
                     open={!!editStudent}
                     onOpenChange={(open) => !open && setEditStudent(null)}
@@ -1567,8 +1593,8 @@ export default function DeanStudents({
                     className="sm:max-w-2xl"
                 >
                     <Form
-                        action={update(editStudent.id).url}
-                        method={update(editStudent.id).method}
+                        action={portalRoutes.students.update(editStudent.id).url}
+                        method={portalRoutes.students.update(editStudent.id).method}
                         onSuccess={() => setEditStudent(null)}
                         className="space-y-4"
                     >
@@ -1836,6 +1862,14 @@ export default function DeanStudents({
     );
 }
 
+export default function DeanStudents(props: Props) {
+    return (
+        <DeanPortalRoutesProvider value={deanPortalRoutes}>
+            <DeanStudentsPage {...props} />
+        </DeanPortalRoutesProvider>
+    );
+}
+
 DeanStudents.layout = {
-    breadcrumbs: [{ title: 'Students', href: studentsIndex().url }],
+    breadcrumbs: [{ title: 'Students', href: deanPortalRoutes.students.index().url }],
 };

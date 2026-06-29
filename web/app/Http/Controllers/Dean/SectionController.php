@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dean;
 
+use App\Http\Controllers\Concerns\ResolvesDeanPortalPresentation;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\StoreSectionRequest;
@@ -16,6 +17,7 @@ use Inertia\Response;
 
 class SectionController extends Controller
 {
+    use ResolvesDeanPortalPresentation;
     use ResolvesDeanScope;
 
     public function index(Request $request): Response
@@ -88,7 +90,7 @@ class SectionController extends Controller
                 ->values()
                 ->all();
 
-        return Inertia::render('deans/sections', [
+        return $this->deanPortalRender('sections', [
             'course' => $this->deanPortalContextPayload($request),
             'majors' => $majors,
             'schoolYears' => $schoolYears,
@@ -129,7 +131,7 @@ class SectionController extends Controller
             'message' => 'Section created successfully.',
         ]);
 
-        return redirect()->route('deans.sections.index');
+        return $this->deanPortalRedirect('sections.index');
     }
 
     public function update(UpdateSectionRequest $request, Section $section): RedirectResponse
@@ -148,7 +150,7 @@ class SectionController extends Controller
             'message' => 'Section updated successfully.',
         ]);
 
-        return redirect()->route('deans.sections.index');
+        return $this->deanPortalRedirect('sections.index');
     }
 
     public function destroy(Request $request, Section $section): RedirectResponse
@@ -161,7 +163,7 @@ class SectionController extends Controller
                 'message' => 'Cannot deactivate a section that has students assigned.',
             ]);
 
-            return redirect()->route('deans.sections.index');
+            return $this->deanPortalRedirect('sections.index');
         }
 
         $section->update(['is_active' => false]);
@@ -171,6 +173,6 @@ class SectionController extends Controller
             'message' => 'Section deactivated.',
         ]);
 
-        return redirect()->route('deans.sections.index');
+        return $this->deanPortalRedirect('sections.index');
     }
 }

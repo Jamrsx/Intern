@@ -1,0 +1,111 @@
+import type { RouteQueryOptions, RouteDefinition, RouteFormDefinition } from '@/wayfinder';
+import {
+    bulkStore,
+    destroy,
+    index as studentsIndex,
+    mailAllCredentials,
+    mailCredentials,
+    store,
+    update,
+} from '@/routes/deans/students';
+import {
+    destroy as destroyCoordinator,
+    index as coordinatorsIndex,
+    mailCredentials as mailCoordinatorCredentials,
+    store as storeCoordinator,
+    update as updateCoordinator,
+} from '@/routes/deans/coordinators';
+import {
+    activate,
+    archive,
+    destroy as destroySchoolYear,
+    index as schoolYearsIndex,
+    store as storeSchoolYear,
+    update as updateSchoolYear,
+} from '@/routes/deans/school-years';
+import {
+    destroy as destroySection,
+    index as sectionsIndex,
+    store as storeSection,
+    update as updateSection,
+} from '@/routes/deans/sections';
+
+export type DeanPortalStudentsRoutes = {
+    store: typeof store;
+    bulkStore: typeof bulkStore;
+    destroy: typeof destroy;
+    index: typeof studentsIndex;
+    mailAllCredentials: typeof mailAllCredentials;
+    mailCredentials: typeof mailCredentials;
+    update: typeof update;
+};
+
+export type DeanPortalSectionsRoutes = {
+    index: typeof sectionsIndex;
+    store: typeof storeSection;
+    update: typeof updateSection;
+    destroy: typeof destroySection;
+};
+
+export type DeanPortalCoordinatorsRoutes = {
+    index: typeof coordinatorsIndex;
+    store: typeof storeCoordinator;
+    update: typeof updateCoordinator;
+    destroy: typeof destroyCoordinator;
+    mailCredentials: typeof mailCoordinatorCredentials;
+};
+
+export type DeanPortalSchoolYearsRoutes = {
+    index: typeof schoolYearsIndex;
+    archive: typeof archive;
+    store: typeof storeSchoolYear;
+    update: typeof updateSchoolYear;
+    destroy: typeof destroySchoolYear;
+    activate: typeof activate;
+};
+
+export type DeanPortalRoutes = {
+    badgeText: string;
+    readOnly: boolean;
+    students: DeanPortalStudentsRoutes;
+    sections: DeanPortalSectionsRoutes;
+    coordinators: DeanPortalCoordinatorsRoutes;
+    schoolYears: DeanPortalSchoolYearsRoutes;
+};
+
+export const deanPortalRoutes: DeanPortalRoutes = {
+    badgeText: 'Dean',
+    readOnly: false,
+    students: {
+        store,
+        bulkStore,
+        destroy,
+        index: studentsIndex,
+        mailAllCredentials,
+        mailCredentials,
+        update,
+    },
+    sections: {
+        index: sectionsIndex,
+        store: storeSection,
+        update: updateSection,
+        destroy: destroySection,
+    },
+    coordinators: {
+        index: coordinatorsIndex,
+        store: storeCoordinator,
+        update: updateCoordinator,
+        destroy: destroyCoordinator,
+        mailCredentials: mailCoordinatorCredentials,
+    },
+    schoolYears: {
+        index: schoolYearsIndex,
+        archive,
+        store: storeSchoolYear,
+        update: updateSchoolYear,
+        destroy: destroySchoolYear,
+        activate,
+    },
+};
+
+// Program head routes are configured in program-head-portal-routes.ts.

@@ -16,6 +16,9 @@ import { edit as editSuperAdminSecurity } from '@/routes/superadmin/security';
 import { edit as editDeanAppearance } from '@/routes/deans/settings/appearance';
 import { edit as editDeanProfile } from '@/routes/deans/settings/profile';
 import { edit as editDeanSecurity } from '@/routes/deans/settings/security';
+import { edit as editProgramHeadAppearance } from '@/routes/programhead/settings/appearance';
+import { edit as editProgramHeadProfile } from '@/routes/programhead/settings/profile';
+import { edit as editProgramHeadSecurity } from '@/routes/programhead/settings/security';
 import { edit as editCoordinatorAppearance } from '@/routes/coordinators/settings/appearance';
 import { edit as editCoordinatorProfile } from '@/routes/coordinators/settings/profile';
 import { edit as editCoordinatorSecurity } from '@/routes/coordinators/settings/security';
@@ -25,9 +28,8 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const { auth } = usePage<{ auth: Auth }>().props;
 
     const isSuperAdmin = auth.user?.role?.name === 'super_admin';
-    const isDeanPortalUser =
-        auth.user?.role?.name === 'dean'
-        || auth.user?.role?.name === 'program_head';
+    const isDean = auth.user?.role?.name === 'dean';
+    const isProgramHead = auth.user?.role?.name === 'program_head';
     const isCoordinator = auth.user?.role?.name === 'coordinator';
 
     const sidebarNavItems: NavItem[] = [
@@ -35,33 +37,39 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
             title: 'Profile',
             href: isSuperAdmin
                 ? editSuperAdminProfile()
-                : isDeanPortalUser
+                : isDean
                     ? editDeanProfile()
-                    : isCoordinator
-                        ? editCoordinatorProfile()
-                        : edit(),
+                    : isProgramHead
+                        ? editProgramHeadProfile()
+                        : isCoordinator
+                            ? editCoordinatorProfile()
+                            : edit(),
             icon: null,
         },
         {
             title: 'Security',
             href: isSuperAdmin
                 ? editSuperAdminSecurity()
-                : isDeanPortalUser
+                : isDean
                     ? editDeanSecurity()
-                    : isCoordinator
-                        ? editCoordinatorSecurity()
-                        : editSecurity(),
+                    : isProgramHead
+                        ? editProgramHeadSecurity()
+                        : isCoordinator
+                            ? editCoordinatorSecurity()
+                            : editSecurity(),
             icon: null,
         },
         {
             title: 'Appearance',
             href: isSuperAdmin
                 ? editSuperAdminAppearance()
-                : isDeanPortalUser
+                : isDean
                     ? editDeanAppearance()
-                    : isCoordinator
-                        ? editCoordinatorAppearance()
-                        : editAppearance(),
+                    : isProgramHead
+                        ? editProgramHeadAppearance()
+                        : isCoordinator
+                            ? editCoordinatorAppearance()
+                            : editAppearance(),
             icon: null,
         },
     ];

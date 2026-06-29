@@ -18,14 +18,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import {
-    destroy,
-    index as deanCoordinatorsIndex,
-    mailCredentials,
-    store,
-    update,
-} from '@/routes/deans/coordinators';
-import { index as sectionsIndex } from '@/routes/deans/sections';
+import { DeanPortalRoutesProvider, useDeanPortalRoutes } from '@/contexts/dean-portal-routes-context';
+import { deanPortalRoutes } from '@/lib/dean-portal-routes';
 
 type Course = {
     id: number;
@@ -93,11 +87,13 @@ function SectionSelect({
     );
 }
 
-export default function DeanCoordinators({
+export function DeanCoordinatorsPage({
     course,
     sections,
     coordinators,
 }: Props) {
+    const portalRoutes = useDeanPortalRoutes();
+    const isReadOnly = portalRoutes.readOnly;
     const [createOpen, setCreateOpen] = useState(false);
     const [editCoordinator, setEditCoordinator] =
         useState<CoordinatorRow | null>(null);
@@ -109,7 +105,7 @@ export default function DeanCoordinators({
         number | null
     >(null);
 
-    const storeRoute = store();
+    const storeRoute = portalRoutes.coordinators.store();
 
     console.log('Dean Coordinators page loaded', {
         course,
@@ -166,7 +162,7 @@ export default function DeanCoordinators({
         });
 
         setMailingCoordinatorId(coordinator.id);
-        router.post(mailCredentials(coordinator.id).url, {}, {
+        router.post(portalRoutes.coordinators.mailCredentials(coordinator.id).url, {}, {
             preserveScroll: true,
             onFinish: () => setMailingCoordinatorId(null),
         });
@@ -177,11 +173,11 @@ export default function DeanCoordinators({
             return;
         }
 
-        router.delete(destroy(coordinator.id).url, { preserveScroll: true });
+        router.delete(portalRoutes.coordinators.destroy(coordinator.id).url, { preserveScroll: true });
     };
 
     const canManageCoordinators =
-        course !== null && availableSections.length > 0;
+        course !== null && availableSections.length > 0 && !isReadOnly;
 
     return (
         <>
@@ -190,9 +186,13 @@ export default function DeanCoordinators({
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
                 <PageHeader
                     title="Coordinators"
-                    description="Create coordinator accounts and assign each one to a section."
+                    description={
+                        isReadOnly
+                            ? 'View coordinators assigned to sections in your program.'
+                            : 'Create coordinator accounts and assign each one to a section.'
+                    }
                     icon={UserCog}
-                    badgeText="Dean"
+                    badgeText={portalRoutes.badgeText}
                     action={
                         canManageCoordinators ? (
                             <Button
@@ -219,7 +219,7 @@ export default function DeanCoordinators({
                         <CardContent className="py-8 text-center text-sm text-muted-foreground">
                             No active sections found.{' '}
                             <Link
-                                href={sectionsIndex().url}
+                                href={portalRoutes.sections.index().url}
                                 className="text-brand underline-offset-4 hover:underline"
                             >
                                 Create a section first
@@ -240,7 +240,7 @@ export default function DeanCoordinators({
                         </Card>
                     )}
 
-                {course && sections.length > 0 && activeCoordinators.length === 0 && availableSections.length > 0 && (
+                {course && sections.length > 0 && activeCoordinators.length === 0 && availableSections.length > 0 && !isReadOnly && (
                     <Card className="border-sidebar-border/70">
                         <CardContent className="py-10 text-center text-sm text-muted-foreground">
                             No coordinators yet. Click{' '}
@@ -248,6 +248,14 @@ export default function DeanCoordinators({
                                 Add Coordinator
                             </span>{' '}
                             to create an account and assign it to a section.
+                        </CardContent>
+                    </Card>
+                )}
+
+                {course && sections.length > 0 && activeCoordinators.length === 0 && isReadOnly && (
+                    <Card className="border-sidebar-border/70">
+                        <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                            No coordinators are assigned to sections in your program yet.
                         </CardContent>
                     </Card>
                 )}
@@ -271,9 +279,11 @@ export default function DeanCoordinators({
                                             <th className="px-4 py-3 font-medium">
                                                 Status
                                             </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Actions
-                                            </th>
+                                            {!isReadOnly ? (
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Actions
+                                                </th>
+                                            ) : null}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -305,54 +315,56 @@ export default function DeanCoordinators({
                                                         Active
                                                     </Badge>
                                                 </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            title="Email login credentials"
-                                                            disabled={
-                                                                mailingCoordinatorId ===
-                                                                coordinator.id
-                                                            }
-                                                            onClick={() =>
-                                                                handleMailCredentials(
-                                                                    coordinator,
-                                                                )
-                                                            }
-                                                        >
-                                                            {mailingCoordinatorId ===
-                                                            coordinator.id ? (
-                                                                <Spinner className="size-3.5" />
-                                                            ) : (
-                                                                <Mail className="size-3.5" />
-                                                            )}
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() =>
-                                                                openEditModal(
-                                                                    coordinator,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Pencil className="size-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="text-red-600 hover:text-red-700"
-                                                            onClick={() =>
-                                                                handleDeactivate(
-                                                                    coordinator,
-                                                                )
-                                                            }
-                                                        >
-                                                            Deactivate
-                                                        </Button>
-                                                    </div>
-                                                </td>
+                                                {!isReadOnly ? (
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex justify-end gap-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                title="Email login credentials"
+                                                                disabled={
+                                                                    mailingCoordinatorId ===
+                                                                    coordinator.id
+                                                                }
+                                                                onClick={() =>
+                                                                    handleMailCredentials(
+                                                                        coordinator,
+                                                                    )
+                                                                }
+                                                            >
+                                                                {mailingCoordinatorId ===
+                                                                coordinator.id ? (
+                                                                    <Spinner className="size-3.5" />
+                                                                ) : (
+                                                                    <Mail className="size-3.5" />
+                                                                )}
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    openEditModal(
+                                                                        coordinator,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Pencil className="size-3.5" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="text-red-600 hover:text-red-700"
+                                                                onClick={() =>
+                                                                    handleDeactivate(
+                                                                        coordinator,
+                                                                    )
+                                                                }
+                                                            >
+                                                                Deactivate
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                ) : null}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -363,7 +375,7 @@ export default function DeanCoordinators({
                 )}
             </div>
 
-            {course && (
+            {course && !isReadOnly && (
                 <AppModal
                     open={createOpen}
                     onOpenChange={setCreateOpen}
@@ -509,7 +521,7 @@ export default function DeanCoordinators({
                 </AppModal>
             )}
 
-            {editCoordinator && course && (
+            {editCoordinator && course && !isReadOnly && (
                 <AppModal
                     open={!!editCoordinator}
                     onOpenChange={(open) => !open && setEditCoordinator(null)}
@@ -517,8 +529,8 @@ export default function DeanCoordinators({
                     description={`Update ${editCoordinator.name}`}
                 >
                     <Form
-                        action={update(editCoordinator.id).url}
-                        method={update(editCoordinator.id).method}
+                        action={portalRoutes.coordinators.update(editCoordinator.id).url}
+                        method={portalRoutes.coordinators.update(editCoordinator.id).method}
                         onSuccess={() => setEditCoordinator(null)}
                         className="space-y-4"
                     >
@@ -610,6 +622,14 @@ export default function DeanCoordinators({
     );
 }
 
+export default function DeanCoordinators(props: Props) {
+    return (
+        <DeanPortalRoutesProvider value={deanPortalRoutes}>
+            <DeanCoordinatorsPage {...props} />
+        </DeanPortalRoutesProvider>
+    );
+}
+
 DeanCoordinators.layout = {
-    breadcrumbs: [{ title: 'Coordinators', href: deanCoordinatorsIndex().url }],
+    breadcrumbs: [{ title: 'Coordinators', href: deanPortalRoutes.coordinators.index().url }],
 };

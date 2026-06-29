@@ -13,6 +13,10 @@ use App\Http\Controllers\Dean\DashboardController as DeanDashboardController;
 use App\Http\Controllers\Dean\SchoolYearController as DeanSchoolYearController;
 use App\Http\Controllers\Dean\SectionController as DeanSectionController;
 use App\Http\Controllers\Dean\StudentController as DeanStudentController;
+use App\Http\Controllers\ProgramHead\CoordinatorController as ProgramHeadCoordinatorController;
+use App\Http\Controllers\ProgramHead\DashboardController as ProgramHeadDashboardController;
+use App\Http\Controllers\ProgramHead\SectionController as ProgramHeadSectionController;
+use App\Http\Controllers\ProgramHead\StudentController as ProgramHeadStudentController;
 use App\Http\Controllers\SuperAdmin\CourseController as SuperAdminCourseController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboardController;
 use App\Http\Controllers\SuperAdmin\DeanController as SuperAdminDeanController;
@@ -34,9 +38,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         if (auth()->user()?->loadMissing('role')->hasRole('super_admin')) {
             return redirect()->route('superadmin.dashboard');
         }
-        if (auth()->user()?->loadMissing('role')->hasRole('dean')
-            || auth()->user()?->loadMissing('role')->hasRole('program_head')) {
+        if (auth()->user()?->loadMissing('role')->hasRole('dean')) {
             return redirect()->route('deans.dashboard');
+        }
+        if (auth()->user()?->loadMissing('role')->hasRole('program_head')) {
+            return redirect()->route('programhead.dashboard');
         }
         if (auth()->user()?->loadMissing('role')->hasRole('coordinator')) {
             return redirect()->route('coordinators.dashboard');
@@ -92,6 +98,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->except(['show', 'create', 'edit']);
             Route::post('coordinators/{coordinator}/mail-credentials', [DeanCoordinatorController::class, 'mailCredentials'])
                 ->name('coordinators.mail-credentials');
+        });
+
+    Route::middleware('program_head')
+        ->prefix('programhead')
+        ->name('programhead.')
+        ->group(function () {
+            Route::get('dashboard', [ProgramHeadDashboardController::class, 'index'])
+                ->name('dashboard');
+
+            Route::get('students', [ProgramHeadStudentController::class, 'index'])
+                ->name('students.index');
+
+            Route::get('sections', [ProgramHeadSectionController::class, 'index'])
+                ->name('sections.index');
+
+            Route::get('coordinators', [ProgramHeadCoordinatorController::class, 'index'])
+                ->name('coordinators.index');
         });
 
     Route::middleware('coordinator')

@@ -101,15 +101,16 @@ it('creates missing sections during bulk student import', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);
 
-    $programHeadRoleId = Role::query()->where('name', 'program_head')->value('id');
+    $deanRoleId = Role::query()->where('name', 'dean')->value('id');
     $schoolYear = SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
 
-    $programHead = User::factory()->create(['role_id' => $programHeadRoleId]);
+    $dean = User::factory()->create(['role_id' => $deanRoleId]);
 
     $course = Course::query()->create([
         'code' => 'BSBA',
         'name' => 'Bachelor of Science in Business Administration',
         'required_hours' => 600,
+        'dean_user_id' => $dean->id,
         'is_active' => true,
     ]);
 
@@ -118,7 +119,6 @@ it('creates missing sections during bulk student import', function () {
         'name' => 'Financial Management',
         'code' => 'FM',
         'sort_order' => 0,
-        'program_head_user_id' => $programHead->id,
     ]);
 
     $existingSection = Section::query()->create([
@@ -129,7 +129,7 @@ it('creates missing sections during bulk student import', function () {
         'is_active' => true,
     ]);
 
-    $this->actingAs($programHead)
+    $this->actingAs($dean)
         ->post(route('deans.students.bulk-store'), [
             'students' => [
                 [

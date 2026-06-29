@@ -5,6 +5,7 @@ import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import CoordinatorLayout from '@/layouts/coordinator-layout';
+import ProgramHeadLayout from '@/layouts/programhead-layout';
 import DeanLayout from '@/layouts/dean-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import SuperAdminLayout from '@/layouts/superadmin-layout';
@@ -26,6 +27,10 @@ createInertiaApp({
                 return [DeanLayout, SettingsLayout];
             case name.startsWith('deans/'):
                 return DeanLayout;
+            case name.startsWith('programhead/settings/'):
+                return [ProgramHeadLayout, SettingsLayout];
+            case name.startsWith('programhead/'):
+                return ProgramHeadLayout;
             case name.startsWith('coordinator/settings/'):
                 return [CoordinatorLayout, SettingsLayout];
             case name.startsWith('coordinator/'):

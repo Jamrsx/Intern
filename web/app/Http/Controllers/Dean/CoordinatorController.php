@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dean;
 
+use App\Http\Controllers\Concerns\ResolvesDeanPortalPresentation;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\StoreCoordinatorRequest;
@@ -21,6 +22,7 @@ use Inertia\Response;
 
 class CoordinatorController extends Controller
 {
+    use ResolvesDeanPortalPresentation;
     use ResolvesDeanScope;
 
     public function index(Request $request): Response
@@ -28,7 +30,7 @@ class CoordinatorController extends Controller
         $course = $this->deanCourse($request);
 
         if ($course === null) {
-            return Inertia::render('deans/coordinators', [
+            return $this->deanPortalRender('coordinators', [
                 'course' => null,
                 'sections' => [],
                 'coordinators' => [],
@@ -84,7 +86,7 @@ class CoordinatorController extends Controller
             ->values()
             ->all();
 
-        return Inertia::render('deans/coordinators', [
+        return $this->deanPortalRender('coordinators', [
             'course' => $this->deanPortalContextPayload($request),
             'sections' => $sections,
             'coordinators' => $coordinators,
@@ -131,7 +133,7 @@ class CoordinatorController extends Controller
                     'message' => "Coordinator {$validated['name']} was created, but the credentials email could not be sent.",
                 ]);
 
-                return redirect()->route('deans.coordinators.index');
+                return $this->deanPortalRedirect('coordinators.index');
             }
 
             Inertia::flash('toast', [
@@ -139,7 +141,7 @@ class CoordinatorController extends Controller
                 'message' => "Coordinator {$validated['name']} created and login credentials were emailed.",
             ]);
 
-            return redirect()->route('deans.coordinators.index');
+            return $this->deanPortalRedirect('coordinators.index');
         }
 
         Inertia::flash('toast', [
@@ -147,7 +149,7 @@ class CoordinatorController extends Controller
             'message' => "Coordinator {$validated['name']} created. Password: {$password}",
         ]);
 
-        return redirect()->route('deans.coordinators.index');
+        return $this->deanPortalRedirect('coordinators.index');
     }
 
     public function update(UpdateCoordinatorRequest $request, User $coordinator): RedirectResponse
@@ -179,7 +181,7 @@ class CoordinatorController extends Controller
             'message' => 'Coordinator updated successfully.',
         ]);
 
-        return redirect()->route('deans.coordinators.index');
+        return $this->deanPortalRedirect('coordinators.index');
     }
 
     public function mailCredentials(Request $request, User $coordinator): RedirectResponse
@@ -205,7 +207,7 @@ class CoordinatorController extends Controller
                 'message' => "Could not send credentials to {$coordinator->name}.",
             ]);
 
-            return redirect()->route('deans.coordinators.index');
+            return $this->deanPortalRedirect('coordinators.index');
         }
 
         Inertia::flash('toast', [
@@ -213,7 +215,7 @@ class CoordinatorController extends Controller
             'message' => "Login credentials sent to {$coordinator->name}. Their password was reset to a new temporary password.",
         ]);
 
-        return redirect()->route('deans.coordinators.index');
+        return $this->deanPortalRedirect('coordinators.index');
     }
 
     public function destroy(Request $request, User $coordinator): RedirectResponse
@@ -241,7 +243,7 @@ class CoordinatorController extends Controller
             'message' => 'Coordinator deactivated.',
         ]);
 
-        return redirect()->route('deans.coordinators.index');
+        return $this->deanPortalRedirect('coordinators.index');
     }
 
     private function sendCoordinatorCredentials(

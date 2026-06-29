@@ -87,28 +87,28 @@ it('scopes sections and students to a program head major', function () {
     ]);
 
     $this->actingAs($this->fmHead)
-        ->get(route('deans.sections.index'))
+        ->get(route('programhead.sections.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('deans/sections')
+            ->component('programhead/sections')
             ->has('sections', 1)
             ->where('sections.0.id', $this->fmSection->id)
             ->where('course.portal_role', 'program_head')
             ->where('course.major.id', $this->fmMajor->id));
 
     $this->actingAs($this->fmHead)
-        ->get(route('deans.dashboard'))
+        ->get(route('programhead.dashboard'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('deans/dashboard')
+            ->component('programhead/dashboard')
             ->where('stats.students', 1)
             ->where('course.portal_role', 'program_head'));
 
     $this->actingAs($this->fmHead)
-        ->get(route('deans.students.index'))
+        ->get(route('programhead.students.index'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
-            ->component('deans/students')
+            ->component('programhead/students')
             ->has('students', 1)
             ->where('students.0.student_number', 'FM-001'));
 });
@@ -133,25 +133,27 @@ it('allows a college dean to see all majors within the course', function () {
                 ->firstWhere('name', '2025-2026')['sections_count'] === 2));
 });
 
-it('auto-assigns major when a program head creates a section', function () {
+it('blocks a program head from mutating portal data', function () {
     $this->actingAs($this->fmHead)
         ->post(route('deans.sections.store'), [
             'school_year_id' => $this->schoolYear->id,
             'name' => '4C',
             'is_active' => '1',
         ])
-        ->assertRedirect(route('deans.sections.index'));
+        ->assertForbidden();
 
-    $section = Section::query()
-        ->where('course_id', $this->course->id)
-        ->where('name', '4C')
-        ->first();
-
-    expect($section)->not->toBeNull();
-    expect($section?->course_major_id)->toBe($this->fmMajor->id);
+    $this->actingAs($this->fmHead)
+        ->post(route('deans.students.store'), [
+            'student_number' => '2022-1-00001',
+            'email' => 'new.student@gmail.com',
+            'first_name' => 'New',
+            'last_name' => 'Student',
+            'section_id' => $this->fmSection->id,
+        ])
+        ->assertForbidden();
 });
 
-it('blocks a program head from accessing another major section', function () {
+it('blocks a program head from updating another major section via dean routes', function () {
     $this->actingAs($this->fmHead)
         ->patch(route('deans.sections.update', $this->mmSection), [
             'school_year_id' => $this->schoolYear->id,
@@ -161,24 +163,34 @@ it('blocks a program head from accessing another major section', function () {
         ->assertForbidden();
 });
 
-it('renders dean portal pages for program heads', function () {
+it('renders program head portal pages and blocks dean routes', function () {
+    $this->actingAs($this->fmHead)
+        ->get(route('programhead.dashboard'))
+        ->assertOk();
+
+    $this->actingAs($this->fmHead)
+        ->get(route('programhead.students.index'))
+        ->assertOk();
+
+    $this->actingAs($this->fmHead)
+        ->get(route('programhead.sections.index'))
+        ->assertOk();
+
+    $this->actingAs($this->fmHead)
+        ->get(route('programhead.coordinators.index'))
+        ->assertOk();
+
     $this->actingAs($this->fmHead)
         ->get(route('deans.dashboard'))
-        ->assertOk();
+        ->assertForbidden();
 
     $this->actingAs($this->fmHead)
-        ->get(route('deans.school-years.index'))
-        ->assertOk();
-
-    $this->actingAs($this->fmHead)
-        ->get(route('deans.students.index'))
-        ->assertOk();
-
-    $this->actingAs($this->fmHead)
-        ->get(route('deans.sections.index'))
-        ->assertOk();
-
-    $this->actingAs($this->fmHead)
-        ->get(route('deans.coordinators.index'))
-        ->assertOk();
+        ->post(route('deans.students.store'), [
+            'student_number' => '2022-1-00002',
+            'email' => 'blocked@gmail.com',
+            'first_name' => 'Blocked',
+            'last_name' => 'Student',
+            'section_id' => $this->fmSection->id,
+        ])
+        ->assertForbidden();
 });

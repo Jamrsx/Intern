@@ -11,7 +11,8 @@ import {
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { index as schoolYearsIndex } from '@/routes/deans/school-years';
+import { DeanPortalRoutesProvider, useDeanPortalRoutes } from '@/contexts/dean-portal-routes-context';
+import { deanPortalRoutes } from '@/lib/dean-portal-routes';
 
 type Course = {
     id: number;
@@ -134,10 +135,11 @@ function InternshipCell({
     );
 }
 
-export default function DeanSchoolYearsArchive({
+export function DeanSchoolYearsArchivePage({
     course,
     archivedSchoolYears,
 }: Props) {
+    const portalRoutes = useDeanPortalRoutes();
     const [openSchoolYears, setOpenSchoolYears] = useState<
         Record<number, boolean>
     >({});
@@ -193,10 +195,10 @@ export default function DeanSchoolYearsArchive({
                     title="Archived School Years"
                     description={`Review inactive school years for ${course.code}: sections, students, and internship placements.`}
                     icon={Archive}
-                    badgeText="Dean"
+                    badgeText={portalRoutes.badgeText}
                     action={
                         <Button variant="outline" asChild>
-                            <Link href={schoolYearsIndex().url}>
+                            <Link href={portalRoutes.schoolYears.index().url}>
                                 <ArrowLeft className="mr-2 size-4" />
                                 Back to school years
                             </Link>
@@ -489,9 +491,17 @@ export default function DeanSchoolYearsArchive({
     );
 }
 
+export default function DeanSchoolYearsArchive(props: Props) {
+    return (
+        <DeanPortalRoutesProvider value={deanPortalRoutes}>
+            <DeanSchoolYearsArchivePage {...props} />
+        </DeanPortalRoutesProvider>
+    );
+}
+
 DeanSchoolYearsArchive.layout = {
     breadcrumbs: [
-        { title: 'School Years', href: schoolYearsIndex().url },
-        { title: 'Archived', href: '#' },
+        { title: 'School Years', href: deanPortalRoutes.schoolYears.index().url },
+        { title: 'Archived', href: deanPortalRoutes.schoolYears.archive().url },
     ],
 };

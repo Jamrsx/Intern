@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dean;
 
+use App\Http\Controllers\Concerns\ResolvesDeanPortalPresentation;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
 use App\Http\Requests\Dean\BulkStoreStudentRequest;
@@ -28,6 +29,7 @@ use Inertia\Response;
 
 class StudentController extends Controller
 {
+    use ResolvesDeanPortalPresentation;
     use ResolvesDeanScope;
 
     private const DEFAULT_STUDENT_PASSWORD = 'password';
@@ -41,7 +43,7 @@ class StudentController extends Controller
         $companies = $this->companyOptions($course);
         $supervisors = $this->supervisorOptions($course);
 
-        return Inertia::render('deans/students', [
+        return $this->deanPortalRender('students', [
             'course' => $this->deanPortalContextPayload($request),
             'sections' => $sections,
             'students' => $students,
@@ -63,7 +65,7 @@ class StudentController extends Controller
             'message' => "Student {$result['student']->fullName()} created. Temporary password: {$result['password']}",
         ]);
 
-        return redirect()->route('deans.students.index');
+        return $this->deanPortalRedirect('students.index');
     }
 
     public function bulkStore(BulkStoreStudentRequest $request): RedirectResponse
@@ -121,7 +123,7 @@ class StudentController extends Controller
             'message' => $message,
         ]);
 
-        return redirect()->route('deans.students.index');
+        return $this->deanPortalRedirect('students.index');
     }
 
     public function update(UpdateStudentRequest $request, Student $student): RedirectResponse
@@ -169,7 +171,7 @@ class StudentController extends Controller
             'message' => 'Student updated successfully.',
         ]);
 
-        return redirect()->route('deans.students.index');
+        return $this->deanPortalRedirect('students.index');
     }
 
     public function mailCredentials(Request $request, Student $student): RedirectResponse
@@ -193,7 +195,7 @@ class StudentController extends Controller
                 'message' => "Could not send credentials to {$student->fullName()}.",
             ]);
 
-            return redirect()->route('deans.students.index');
+            return $this->deanPortalRedirect('students.index');
         }
 
         Inertia::flash('toast', [
@@ -201,7 +203,7 @@ class StudentController extends Controller
             'message' => "Login credentials sent to {$student->fullName()}.",
         ]);
 
-        return redirect()->route('deans.students.index');
+        return $this->deanPortalRedirect('students.index');
     }
 
     public function mailAllCredentials(Request $request): RedirectResponse
@@ -226,7 +228,7 @@ class StudentController extends Controller
                 'message' => 'No active students found to email.',
             ]);
 
-            return redirect()->route('deans.students.index');
+            return $this->deanPortalRedirect('students.index');
         }
 
         $sentCount = 0;
@@ -248,7 +250,7 @@ class StudentController extends Controller
                 'message' => 'Could not send credentials to any students.',
             ]);
 
-            return redirect()->route('deans.students.index');
+            return $this->deanPortalRedirect('students.index');
         }
 
         $message = "Login credentials sent to {$sentCount} student(s).";
@@ -262,7 +264,7 @@ class StudentController extends Controller
             'message' => $message,
         ]);
 
-        return redirect()->route('deans.students.index');
+        return $this->deanPortalRedirect('students.index');
     }
 
     public function destroy(Request $request, Student $student): RedirectResponse
@@ -285,7 +287,7 @@ class StudentController extends Controller
             'message' => 'Student account deactivated.',
         ]);
 
-        return redirect()->route('deans.students.index');
+        return $this->deanPortalRedirect('students.index');
     }
 
     /**

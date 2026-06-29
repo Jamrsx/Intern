@@ -11,14 +11,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import {
-    activate,
-    archive as schoolYearsArchive,
-    destroy,
-    index as schoolYearsIndex,
-    store,
-    update,
-} from '@/routes/deans/school-years';
+import { DeanPortalRoutesProvider, useDeanPortalRoutes } from '@/contexts/dean-portal-routes-context';
+import { deanPortalRoutes } from '@/lib/dean-portal-routes';
 
 type SchoolYear = {
     id: number;
@@ -53,14 +47,15 @@ function formatDateRange(start: string | null, end: string | null): string {
     return start ?? end ?? '—';
 }
 
-export default function DeanSchoolYears({ course, schoolYears }: Props) {
+export function DeanSchoolYearsPage({ course, schoolYears }: Props) {
+    const portalRoutes = useDeanPortalRoutes();
     const [createOpen, setCreateOpen] = useState(false);
     const [createIsActive, setCreateIsActive] = useState(false);
     const [editSchoolYear, setEditSchoolYear] = useState<SchoolYear | null>(
         null,
     );
     const [editIsActive, setEditIsActive] = useState(false);
-    const storeRoute = store();
+    const storeRoute = portalRoutes.schoolYears.store();
 
     useEffect(() => {
         if (createOpen) {
@@ -95,13 +90,13 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
 
         console.log('Closing school year', schoolYear.id, schoolYear.name);
 
-        router.delete(destroy(schoolYear.id).url, {
+        router.delete(portalRoutes.schoolYears.destroy(schoolYear.id).url, {
             preserveScroll: true,
         });
     };
 
     const handleActivate = (schoolYear: SchoolYear) => {
-        router.patch(activate(schoolYear.id).url, {}, { preserveScroll: true });
+        router.patch(portalRoutes.schoolYears.activate(schoolYear.id).url, {}, { preserveScroll: true });
     };
 
     return (
@@ -113,11 +108,11 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
                     title="School Years"
                     description="Create school years and set which one is active for section and student management."
                     icon={CalendarDays}
-                    badgeText="Dean"
+                    badgeText={portalRoutes.badgeText}
                     action={
                         <div className="flex flex-wrap gap-2">
                             <Button variant="outline" asChild>
-                                <Link href={schoolYearsArchive().url}>
+                                <Link href={portalRoutes.schoolYears.archive().url}>
                                     <Archive className="mr-2 size-4" />
                                     View archived
                                     {inactiveCount > 0
@@ -367,8 +362,8 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
                     description={`Update ${editSchoolYear.name}`}
                 >
                     <Form
-                        action={update(editSchoolYear.id).url}
-                        method={update(editSchoolYear.id).method}
+                        action={portalRoutes.schoolYears.update(editSchoolYear.id).url}
+                        method={portalRoutes.schoolYears.update(editSchoolYear.id).method}
                         onSuccess={() => setEditSchoolYear(null)}
                         className="space-y-4"
                     >
@@ -467,8 +462,16 @@ export default function DeanSchoolYears({ course, schoolYears }: Props) {
     );
 }
 
+export default function DeanSchoolYears(props: Props) {
+    return (
+        <DeanPortalRoutesProvider value={deanPortalRoutes}>
+            <DeanSchoolYearsPage {...props} />
+        </DeanPortalRoutesProvider>
+    );
+}
+
 DeanSchoolYears.layout = {
     breadcrumbs: [
-        { title: 'School Years', href: schoolYearsIndex().url },
+        { title: 'School Years', href: deanPortalRoutes.schoolYears.index().url },
     ],
 };
