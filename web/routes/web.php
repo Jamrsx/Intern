@@ -84,14 +84,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('school-years/{school_year}/activate', [DeanSchoolYearController::class, 'activate'])
                 ->name('school-years.activate');
 
-            Route::post('students/bulk', [DeanStudentController::class, 'bulkStore'])
-                ->name('students.bulk-store');
-            Route::post('students/mail-credentials', [DeanStudentController::class, 'mailAllCredentials'])
-                ->name('students.mail-all-credentials');
-            Route::post('students/{student}/mail-credentials', [DeanStudentController::class, 'mailCredentials'])
-                ->name('students.mail-credentials');
-            Route::resource('students', DeanStudentController::class)
-                ->except(['show', 'create', 'edit']);
+            Route::get('students', [DeanStudentController::class, 'index'])
+                ->name('students.index');
+
             Route::resource('sections', DeanSectionController::class)
                 ->except(['show', 'create', 'edit']);
             Route::resource('coordinators', DeanCoordinatorController::class)
@@ -124,8 +119,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('dashboard', [CoordinatorDashboardController::class, 'index'])
                 ->name('dashboard');
 
+            Route::post('students/bulk', [CoordinatorStudentController::class, 'bulkStore'])
+                ->name('students.bulk-store');
+            Route::post('students/mail-credentials', [CoordinatorStudentController::class, 'mailAllCredentials'])
+                ->name('students.mail-all-credentials');
+            Route::post('students/{student}/mail-credentials', [CoordinatorStudentController::class, 'mailCredentials'])
+                ->name('students.mail-credentials');
+
             Route::resource('students', CoordinatorStudentController::class)
-                ->only(['index', 'show', 'update']);
+                ->only(['index', 'show', 'store', 'update', 'destroy']);
 
             Route::get('students/{student}/documents/{document}', [CoordinatorStudentController::class, 'showDocument'])
                 ->name('students.documents.show');

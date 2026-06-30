@@ -6,8 +6,8 @@ import { deanPortalRoutes, type DeanPortalRoutes } from '@/lib/dean-portal-route
 export const programHeadPortalRoutes: DeanPortalRoutes = {
     badgeText: 'Program Head',
     readOnly: true,
+    studentsReadOnly: true,
     students: {
-        ...deanPortalRoutes.students,
         index: studentsIndex,
     },
     sections: {

@@ -1,5 +1,5 @@
 import { Form, Head, Link, router } from '@inertiajs/react';
-import { ChevronDown, ListChecks, Pencil, Plus } from 'lucide-react';
+import { CheckCircle, ChevronDown, ListChecks, Pencil, Plus } from 'lucide-react';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import { AppModal } from '@/components/superadmin/app-modal';
@@ -184,6 +184,9 @@ export function DeanSectionsPage({
     const isReadOnly = portalRoutes.readOnly;
     const [createOpen, setCreateOpen] = useState(false);
     const [editSection, setEditSection] = useState<Section | null>(null);
+    const [activatingSectionId, setActivatingSectionId] = useState<number | null>(
+        null,
+    );
     const [filterSchoolYearId, setFilterSchoolYearId] = useState('all');
     const [createSchoolYearId, setCreateSchoolYearId] = useState('');
     const [createMajorId, setCreateMajorId] = useState('');
@@ -273,6 +276,28 @@ export function DeanSectionsPage({
         router.delete(portalRoutes.sections.destroy(section.id).url, {
             preserveScroll: true,
         });
+    };
+
+    const handleActivate = (section: Section) => {
+        console.log('Dean activate section', {
+            sectionId: section.id,
+            name: section.display_name,
+        });
+
+        setActivatingSectionId(section.id);
+        router.patch(
+            portalRoutes.sections.update(section.id).url,
+            {
+                school_year_id: section.school_year_id,
+                name: section.name,
+                code: section.code ?? '',
+                is_active: '1',
+            },
+            {
+                preserveScroll: true,
+                onFinish: () => setActivatingSectionId(null),
+            },
+        );
     };
 
     const openCreateModal = () => {
@@ -580,6 +605,30 @@ export function DeanSectionsPage({
                                                                                     >
                                                                                         <Pencil className="size-3.5" />
                                                                                     </Button>
+                                                                                    {!section.is_active && (
+                                                                                        <Button
+                                                                                            variant="outline"
+                                                                                            size="sm"
+                                                                                            className="text-emerald-600 hover:text-emerald-700"
+                                                                                            disabled={
+                                                                                                activatingSectionId ===
+                                                                                                section.id
+                                                                                            }
+                                                                                            onClick={() =>
+                                                                                                handleActivate(
+                                                                                                    section,
+                                                                                                )
+                                                                                            }
+                                                                                        >
+                                                                                            {activatingSectionId ===
+                                                                                            section.id ? (
+                                                                                                <Spinner className="size-3.5" />
+                                                                                            ) : (
+                                                                                                <CheckCircle className="size-3.5" />
+                                                                                            )}
+                                                                                            Activate
+                                                                                        </Button>
+                                                                                    )}
                                                                                     {section.is_active &&
                                                                                         section.students_count ===
                                                                                             0 && (

@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Coordinator;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Coordinator\Concerns\FormatsEvaluationTemplates;
 use App\Http\Controllers\Coordinator\Concerns\ResolvesCoordinatorCourse;
-use App\Http\Requests\Coordinator\UpdateStudentPlacementRequest;
+use App\Http\Requests\Coordinator\BulkStoreStudentRequest;
+use App\Http\Requests\Coordinator\StoreStudentRequest;
+use App\Http\Requests\Coordinator\UpdateCoordinatorStudentRequest;
 use App\Models\Company;
 use App\Models\OjtEvaluation;
 use App\Models\Section;
@@ -14,8 +16,10 @@ use App\Models\StudentDocument;
 use App\Models\Supervisor;
 use App\Support\EvaluationAlertService;
 use App\Support\OjtProgressCalculator;
+use App\Support\StudentAccountService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -93,32 +97,219 @@ class StudentController extends Controller
         ]);
     }
 
-    public function update(UpdateStudentPlacementRequest $request, Student $student): RedirectResponse
+    public function store(StoreStudentRequest $request): RedirectResponse
     {
+        $section = $this->coordinatorSectionOrFail($request);
         $validated = $request->validated();
 
-        if (empty($validated['company_id'])) {
-            $validated['department_id'] = null;
-            $validated['supervisor_id'] = null;
-        }
-
-        if (empty($validated['department_id']) && ! empty($validated['supervisor_id'])) {
-            $supervisor = Supervisor::query()->find($validated['supervisor_id']);
-            $validated['department_id'] = $supervisor?->department_id;
-        }
-
-        $student->update([
-            'company_id' => $validated['company_id'] ?? null,
-            'department_id' => $validated['department_id'] ?? null,
-            'supervisor_id' => $validated['supervisor_id'] ?? null,
-        ]);
+        $result = DB::transaction(fn () => app(StudentAccountService::class)->create([
+            ...$validated,
+            'section_id' => $section->id,
+        ]));
 
         Inertia::flash('toast', [
             'type' => 'success',
-            'message' => 'OJT placement updated successfully.',
+            'message' => "Student {$result['student']->fullName()} created. Temporary password: {$result['password']}",
+        ]);
+
+        return redirect()->route('coordinators.students.index');
+    }
+
+    public function bulkStore(BulkStoreStudentRequest $request): RedirectResponse
+    {
+        $section = $this->coordinatorSectionOrFail($request);
+        $validated = $request->validated();
+        $service = app(StudentAccountService::class);
+        $createdCount = 0;
+
+        DB::transaction(function () use ($validated, $section, $service, &$createdCount) {
+            foreach ($validated['students'] as $studentData) {
+                $service->create([
+                    ...$studentData,
+                    'email' => $studentData['email'] ?? $service->generatedBulkEmail($studentData['student_number']),
+                    'section_id' => $section->id,
+                ]);
+
+                $createdCount++;
+            }
+        });
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "{$createdCount} student account(s) created. Default password is \"".StudentAccountService::DEFAULT_PASSWORD.'" for each account.',
+        ]);
+
+        return redirect()->route('coordinators.students.index');
+    }
+
+    public function update(UpdateCoordinatorStudentRequest $request, Student $student): RedirectResponse
+    {
+        $section = $this->coordinatorSectionOrFail($request);
+        $this->ensureStudentInSection($student, $section);
+        $validated = $request->validated();
+
+        $hasAccountUpdate = collect([
+            'student_number',
+            'email',
+            'first_name',
+            'middle_name',
+            'last_name',
+            'is_active',
+        ])->contains(fn (string $field) => array_key_exists($field, $validated));
+
+        $hasPlacementUpdate = collect([
+            'company_id',
+            'department_id',
+            'supervisor_id',
+        ])->contains(fn (string $field) => array_key_exists($field, $validated));
+
+        DB::transaction(function () use ($student, $validated, $request, $hasAccountUpdate, $hasPlacementUpdate) {
+            if ($hasAccountUpdate) {
+                $isActive = array_key_exists('is_active', $validated)
+                    ? $request->boolean('is_active')
+                    : $student->is_active;
+
+                if (isset($validated['first_name'], $validated['last_name'], $validated['email'])) {
+                    $student->user->update([
+                        'name' => app(StudentAccountService::class)->fullName(
+                            $validated['first_name'],
+                            $validated['middle_name'] ?? null,
+                            $validated['last_name'],
+                        ),
+                        'email' => $validated['email'],
+                        'is_active' => $isActive,
+                    ]);
+
+                    $student->update([
+                        'student_number' => $validated['student_number'] ?? $student->student_number,
+                        'first_name' => $validated['first_name'],
+                        'middle_name' => $validated['middle_name'] ?? null,
+                        'last_name' => $validated['last_name'],
+                        'is_active' => $isActive,
+                    ]);
+                } elseif (array_key_exists('is_active', $validated)) {
+                    $student->user->update(['is_active' => $isActive]);
+                    $student->update(['is_active' => $isActive]);
+                }
+            }
+
+            if ($hasPlacementUpdate) {
+                $student->update($this->normalizedPlacementAttributes($validated));
+            }
+        });
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => $hasPlacementUpdate && ! $hasAccountUpdate
+                ? 'OJT placement updated successfully.'
+                : 'Student updated successfully.',
         ]);
 
         return redirect()->back();
+    }
+
+    public function destroy(Request $request, Student $student): RedirectResponse
+    {
+        $section = $this->coordinatorSectionOrFail($request);
+        $this->ensureStudentInSection($student, $section);
+
+        DB::transaction(function () use ($student) {
+            $student->update(['is_active' => false]);
+            $student->user->update(['is_active' => false]);
+        });
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => 'Student account deactivated.',
+        ]);
+
+        return redirect()->route('coordinators.students.index');
+    }
+
+    public function mailCredentials(Request $request, Student $student): RedirectResponse
+    {
+        $section = $this->coordinatorSectionOrFail($request);
+        $this->ensureStudentInSection($student, $section);
+        abort_unless($student->is_active && $student->user->is_active, 422);
+
+        try {
+            app(StudentAccountService::class)->sendCredentials($student);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => "Could not send credentials to {$student->fullName()}.",
+            ]);
+
+            return redirect()->route('coordinators.students.index');
+        }
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "Login credentials sent to {$student->fullName()}.",
+        ]);
+
+        return redirect()->route('coordinators.students.index');
+    }
+
+    public function mailAllCredentials(Request $request): RedirectResponse
+    {
+        $section = $this->coordinatorSectionOrFail($request);
+
+        $students = Student::query()
+            ->with('user')
+            ->where('section_id', $section->id)
+            ->where('is_active', true)
+            ->whereHas('user', fn ($query) => $query->where('is_active', true))
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get();
+
+        if ($students->isEmpty()) {
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => 'No active students found to email.',
+            ]);
+
+            return redirect()->route('coordinators.students.index');
+        }
+
+        $service = app(StudentAccountService::class);
+        $sentCount = 0;
+        $failedCount = 0;
+
+        foreach ($students as $student) {
+            try {
+                $service->sendCredentials($student);
+                $sentCount++;
+            } catch (\Throwable $exception) {
+                report($exception);
+                $failedCount++;
+            }
+        }
+
+        if ($sentCount === 0) {
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => 'Could not send credentials to any students.',
+            ]);
+
+            return redirect()->route('coordinators.students.index');
+        }
+
+        $message = "Login credentials sent to {$sentCount} student(s).";
+
+        if ($failedCount > 0) {
+            $message .= " {$failedCount} email(s) failed.";
+        }
+
+        Inertia::flash('toast', [
+            'type' => $failedCount > 0 ? 'error' : 'success',
+            'message' => $message,
+        ]);
+
+        return redirect()->route('coordinators.students.index');
     }
 
     public function showDocument(Request $request, Student $student, StudentDocument $document): StreamedResponse
@@ -137,6 +328,36 @@ class StudentController extends Controller
                 'Content-Disposition' => 'inline; filename="'.$document->original_filename.'"',
             ],
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, int|null>
+     */
+    private function normalizedPlacementAttributes(array $validated): array
+    {
+        $companyId = $validated['company_id'] ?? null;
+        $departmentId = $validated['department_id'] ?? null;
+        $supervisorId = $validated['supervisor_id'] ?? null;
+
+        if (empty($companyId)) {
+            return [
+                'company_id' => null,
+                'department_id' => null,
+                'supervisor_id' => null,
+            ];
+        }
+
+        if (empty($departmentId) && ! empty($supervisorId)) {
+            $supervisor = Supervisor::query()->find($supervisorId);
+            $departmentId = $supervisor?->department_id;
+        }
+
+        return [
+            'company_id' => $companyId,
+            'department_id' => $departmentId,
+            'supervisor_id' => $supervisorId,
+        ];
     }
 
     private function ensureStudentInSection(Student $student, Section $section): void

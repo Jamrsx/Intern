@@ -41,6 +41,10 @@ import {
 } from '@/lib/coordinator-document-notifications';
 import { useEvaluationAlertPolling } from '@/hooks/use-evaluation-alert-polling';
 import { cn } from '@/lib/utils';
+import {
+    CoordinatorStudentHeaderActions,
+    CoordinatorStudentRowActions,
+} from '@/components/coordinator/coordinator-student-accounts';
 import { index as evaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { storeAll as storeAllEvaluations } from '@/routes/coordinators/students/evaluations';
 import { index as studentsIndex, show } from '@/routes/coordinators/students';
@@ -456,36 +460,44 @@ export default function CoordinatorStudents() {
                     title="Students"
                     description={
                         section
-                            ? `View progress, documents, and OJT placement for ${section.display_name}.`
+                            ? `Manage student accounts and OJT progress for ${section.display_name}.`
                             : 'You are not assigned to a section yet.'
                     }
                     icon={Users}
                     badgeText="Coordinator"
                     action={
-                        <Button
-                            type="button"
-                            onClick={openBulkEvaluationModal}
-                            disabled={
-                                evaluation_stats.eligible === 0 ||
-                                openingAllEvaluations
-                            }
-                            className="bg-brand text-brand-foreground hover:bg-brand-hover"
-                        >
-                            {openingAllEvaluations ? (
-                                <Spinner />
-                            ) : (
-                                <ClipboardList className="mr-2 size-4" />
-                            )}
-                            Send evaluation to all
-                            {evaluation_stats.eligible > 0 && (
-                                <Badge
-                                    variant="secondary"
-                                    className="ml-2 bg-white/20 text-brand-foreground"
+                        section ? (
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                <CoordinatorStudentHeaderActions
+                                    section={section}
+                                    students={students}
+                                />
+                                <Button
+                                    type="button"
+                                    onClick={openBulkEvaluationModal}
+                                    disabled={
+                                        evaluation_stats.eligible === 0 ||
+                                        openingAllEvaluations
+                                    }
+                                    className="bg-brand text-brand-foreground hover:bg-brand-hover"
                                 >
-                                    {evaluation_stats.eligible}
-                                </Badge>
-                            )}
-                        </Button>
+                                    {openingAllEvaluations ? (
+                                        <Spinner />
+                                    ) : (
+                                        <ClipboardList className="mr-2 size-4" />
+                                    )}
+                                    Send evaluation to all
+                                    {evaluation_stats.eligible > 0 && (
+                                        <Badge
+                                            variant="secondary"
+                                            className="ml-2 bg-white/20 text-brand-foreground"
+                                        >
+                                            {evaluation_stats.eligible}
+                                        </Badge>
+                                    )}
+                                </Button>
+                            </div>
+                        ) : undefined
                     }
                 />
 
@@ -636,7 +648,7 @@ export default function CoordinatorStudents() {
                                 <CardContent className="py-10 text-center text-muted-foreground">
                                     {search
                                         ? 'No students match your search.'
-                                        : 'No students in this section yet.'}
+                                        : 'No students in this section yet. Use Add Student or Bulk Add to create intern accounts.'}
                                 </CardContent>
                             </Card>
                         ) : (
@@ -878,32 +890,39 @@ export default function CoordinatorStudents() {
                                                                                 </Badge>
                                                                             </td>
                                                                             <td className="px-4 py-3 text-right">
-                                                                                <Button
-                                                                                    asChild
-                                                                                    variant="outline"
-                                                                                    size="sm"
-                                                                                >
-                                                                                    <Link
-                                                                                        href={show(
-                                                                                            student.id,
-                                                                                        )}
-                                                                                        prefetch
-                                                                                        onClick={() => {
-                                                                                            handleViewStudent(
-                                                                                                student,
-                                                                                            );
-
-                                                                                            if (
-                                                                                                student.has_new_completed_evaluation
-                                                                                            ) {
-                                                                                                markCompletedAlertsSeen();
-                                                                                            }
-                                                                                        }}
+                                                                                <div className="flex items-center justify-end gap-2">
+                                                                                    <CoordinatorStudentRowActions
+                                                                                        student={
+                                                                                            student
+                                                                                        }
+                                                                                    />
+                                                                                    <Button
+                                                                                        asChild
+                                                                                        variant="outline"
+                                                                                        size="sm"
                                                                                     >
-                                                                                        <Eye className="mr-1 size-3.5" />
-                                                                                        View
-                                                                                    </Link>
-                                                                                </Button>
+                                                                                        <Link
+                                                                                            href={show(
+                                                                                                student.id,
+                                                                                            )}
+                                                                                            prefetch
+                                                                                            onClick={() => {
+                                                                                                handleViewStudent(
+                                                                                                    student,
+                                                                                                );
+
+                                                                                                if (
+                                                                                                    student.has_new_completed_evaluation
+                                                                                                ) {
+                                                                                                    markCompletedAlertsSeen();
+                                                                                                }
+                                                                                            }}
+                                                                                        >
+                                                                                            <Eye className="mr-1 size-3.5" />
+                                                                                            View
+                                                                                        </Link>
+                                                                                    </Button>
+                                                                                </div>
                                                                             </td>
                                                                         </tr>
                                                                     ),

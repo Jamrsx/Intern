@@ -1,12 +1,5 @@
-import type { RouteQueryOptions, RouteDefinition, RouteFormDefinition } from '@/wayfinder';
 import {
-    bulkStore,
-    destroy,
     index as studentsIndex,
-    mailAllCredentials,
-    mailCredentials,
-    store,
-    update,
 } from '@/routes/deans/students';
 import {
     destroy as destroyCoordinator,
@@ -31,13 +24,7 @@ import {
 } from '@/routes/deans/sections';
 
 export type DeanPortalStudentsRoutes = {
-    store: typeof store;
-    bulkStore: typeof bulkStore;
-    destroy: typeof destroy;
     index: typeof studentsIndex;
-    mailAllCredentials: typeof mailAllCredentials;
-    mailCredentials: typeof mailCredentials;
-    update: typeof update;
 };
 
 export type DeanPortalSectionsRoutes = {
@@ -67,6 +54,7 @@ export type DeanPortalSchoolYearsRoutes = {
 export type DeanPortalRoutes = {
     badgeText: string;
     readOnly: boolean;
+    studentsReadOnly: boolean;
     students: DeanPortalStudentsRoutes;
     sections: DeanPortalSectionsRoutes;
     coordinators: DeanPortalCoordinatorsRoutes;
@@ -76,14 +64,9 @@ export type DeanPortalRoutes = {
 export const deanPortalRoutes: DeanPortalRoutes = {
     badgeText: 'Dean',
     readOnly: false,
+    studentsReadOnly: true,
     students: {
-        store,
-        bulkStore,
-        destroy,
         index: studentsIndex,
-        mailAllCredentials,
-        mailCredentials,
-        update,
     },
     sections: {
         index: sectionsIndex,
