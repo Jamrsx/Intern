@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Building2, LayoutGrid, Users } from 'lucide-react';
+import { Building2, LayoutGrid, TriangleAlert, Users } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { dashboard as coordinatorDashboard } from '@/routes/coordinators';
@@ -128,17 +128,33 @@ export default function CoordinatorDashboard() {
                 </div>
 
                 {section && stats.unassigned > 0 && (
-                    <Card className="border-sidebar-border/70 shadow-sm">
+                    <Card
+                        role="alert"
+                        className="animate-placement-alert-blink border-red-500/60 bg-red-500/10 shadow-sm"
+                    >
                         <CardHeader>
-                            <CardTitle>Pending placements</CardTitle>
-                            <CardDescription>
-                                {stats.unassigned} student(s) still need an OJT company assignment.
-                            </CardDescription>
+                            <div className="flex items-start gap-3">
+                                <div className="rounded-lg bg-red-500/15 p-2">
+                                    <TriangleAlert className="size-5 text-red-600" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-red-700 dark:text-red-400">
+                                        Pending placements
+                                    </CardTitle>
+                                    <CardDescription className="mt-1 text-red-700/80 dark:text-red-300/80">
+                                        {stats.unassigned} student
+                                        {stats.unassigned === 1 ? '' : 's'} still
+                                        need an OJT company assignment. Assign
+                                        them soon so they can start their
+                                        internship.
+                                    </CardDescription>
+                                </div>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <Button
                                 asChild
-                                className="bg-brand text-brand-foreground hover:bg-brand-hover"
+                                className="bg-red-600 text-white hover:bg-red-700"
                             >
                                 <Link href={coordinatorStudentsIndex()} prefetch>
                                     Manage students

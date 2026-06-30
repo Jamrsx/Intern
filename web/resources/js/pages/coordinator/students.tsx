@@ -4,9 +4,8 @@ import {
     Building2,
     ChevronDown,
     ClipboardList,
-    Eye,
-    FileText,
     Search,
+    TriangleAlert,
     Users,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -35,19 +34,26 @@ import { Spinner } from '@/components/ui/spinner';
 import {
     countUnreadDocumentSubmissions,
     ensureDocumentNotificationBaseline,
-    hasUnreadDocumentSubmission,
     markStudentDocumentsAsSeen,
     readDocumentSeenMap,
 } from '@/lib/coordinator-document-notifications';
 import { useEvaluationAlertPolling } from '@/hooks/use-evaluation-alert-polling';
 import { cn } from '@/lib/utils';
 import {
-    CoordinatorStudentHeaderActions,
-    CoordinatorStudentRowActions,
-} from '@/components/coordinator/coordinator-student-accounts';
+    CoordinatorPlacementModal,
+    type CompanyOption,
+    type SupervisorOption,
+} from '@/components/coordinator/coordinator-placement-modal';
+import {
+    CoordinatorStudentsTable,
+    buildDepartmentGroups,
+} from '@/components/coordinator/coordinator-students-table';
 import { index as evaluationTemplatesIndex } from '@/routes/coordinators/evaluation-templates';
 import { storeAll as storeAllEvaluations } from '@/routes/coordinators/students/evaluations';
-import { index as studentsIndex, show } from '@/routes/coordinators/students';
+import { index as studentsIndex } from '@/routes/coordinators/students';
+import {
+    CoordinatorStudentHeaderActions,
+} from '@/components/coordinator/coordinator-student-accounts';
 
 type Section = {
     id: number;
@@ -110,6 +116,8 @@ type EvaluationTemplateOption = {
 type Props = {
     section: Section;
     students: StudentRow[];
+    companies: CompanyOption[];
+    supervisors: SupervisorOption[];
     evaluation_stats: {
         eligible: number;
         pending: number;
@@ -172,10 +180,16 @@ export default function CoordinatorStudents() {
     const {
         section,
         students,
+        companies,
+        supervisors,
         evaluation_stats,
         evaluation_templates,
         evaluation_alerts,
     } = usePage<Props>().props;
+    const [placementStudent, setPlacementStudent] = useState<StudentRow | null>(
+        null,
+    );
+    const [placementModalOpen, setPlacementModalOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [openingAllEvaluations, setOpeningAllEvaluations] = useState(false);
     const [showBulkEvaluationModal, setShowBulkEvaluationModal] = useState(false);
@@ -378,6 +392,17 @@ export default function CoordinatorStudents() {
         () => students.filter((student) => !student.company_id).length,
         [students],
     );
+
+    const needsPlacement = (student: StudentRow) => student.company_id === null;
+
+    const openPlacementModal = (student: StudentRow) => {
+        console.log('Coordinator open placement modal from list', {
+            studentId: student.id,
+            name: student.full_name,
+        });
+        setPlacementStudent(student);
+        setPlacementModalOpen(true);
+    };
 
     const isGroupOpen = (companyId: number | null) => {
         const key = groupKey(companyId);
@@ -654,9 +679,8 @@ export default function CoordinatorStudents() {
                         ) : (
                             <div className="space-y-4">
                                 <p className="text-sm text-muted-foreground">
-                                    Students grouped by OJT company. Expand a
-                                    company to view department assignments and
-                                    intern details.
+                                    Students grouped by OJT company, then by
+                                    department within each company.
                                 </p>
 
                                 {companyGroups.map((group) => (
@@ -667,7 +691,13 @@ export default function CoordinatorStudents() {
                                             toggleGroup(group.companyId, open)
                                         }
                                     >
-                                        <Card className="overflow-hidden border-sidebar-border/70 py-0 shadow-sm">
+                                        <Card
+                                            className={cn(
+                                                'overflow-hidden border-sidebar-border/70 py-0 shadow-sm',
+                                                group.companyId === null &&
+                                                    'border-amber-500/40',
+                                            )}
+                                        >
                                             <CollapsibleTrigger asChild>
                                                 <button
                                                     type="button"
@@ -675,13 +705,25 @@ export default function CoordinatorStudents() {
                                                 >
                                                     <div>
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            <Building2 className="size-4 text-brand" />
+                                                            {group.companyId ===
+                                                            null ? (
+                                                                <TriangleAlert className="size-4 text-amber-500" />
+                                                            ) : (
+                                                                <Building2 className="size-4 text-brand" />
+                                                            )}
                                                             <h3 className="font-semibold">
                                                                 {
                                                                     group.companyName
                                                                 }
                                                             </h3>
-                                                            <Badge className="bg-brand text-brand-foreground hover:bg-brand">
+                                                            <Badge
+                                                                className={
+                                                                    group.companyId ===
+                                                                    null
+                                                                        ? 'border-amber-500/50 bg-amber-500/15 text-amber-800 hover:bg-amber-500/15 dark:text-amber-300'
+                                                                        : 'bg-brand text-brand-foreground hover:bg-brand'
+                                                                }
+                                                            >
                                                                 {
                                                                     group
                                                                         .students
@@ -696,7 +738,7 @@ export default function CoordinatorStudents() {
                                                         </div>
                                                         {group.companyId ===
                                                             null && (
-                                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                            <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
                                                                 Students still
                                                                 needing OJT
                                                                 company
@@ -716,220 +758,100 @@ export default function CoordinatorStudents() {
                                             </CollapsibleTrigger>
 
                                             <CollapsibleContent>
-                                                <div className="border-t px-4 py-4">
-                                                    <div className="overflow-x-auto rounded-lg border">
-                                                        <table className="w-full text-sm">
-                                                            <thead>
-                                                                <tr className="border-b bg-muted/40 text-left">
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        Student
-                                                                    </th>
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        Email
-                                                                    </th>
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        Department
-                                                                    </th>
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        Supervisor
-                                                                    </th>
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        OJT start
-                                                                    </th>
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        Documents
-                                                                    </th>
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        Evaluations
-                                                                    </th>
-                                                                    <th className="px-4 py-3 font-medium">
-                                                                        Status
-                                                                    </th>
-                                                                    <th className="px-4 py-3 text-right font-medium">
-                                                                        Actions
-                                                                    </th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {group.students.map(
-                                                                    (
-                                                                        student,
-                                                                    ) => (
-                                                                        <tr
-                                                                            key={
-                                                                                student.id
+                                                <div className="space-y-4 border-t px-4 py-4">
+                                                    {group.companyId ===
+                                                    null ? (
+                                                        <CoordinatorStudentsTable
+                                                            students={
+                                                                group.students
+                                                            }
+                                                            notificationsReady={
+                                                                notificationsReady
+                                                            }
+                                                            documentSeenMap={
+                                                                documentSeenMap
+                                                            }
+                                                            needsPlacement={
+                                                                needsPlacement
+                                                            }
+                                                            onAssignPlacement={
+                                                                openPlacementModal
+                                                            }
+                                                            onViewStudent={
+                                                                handleViewStudent
+                                                            }
+                                                            onMarkCompletedAlertsSeen={
+                                                                markCompletedAlertsSeen
+                                                            }
+                                                            formatOjtStartDate={
+                                                                formatOjtStartDate
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        buildDepartmentGroups(
+                                                            group.students,
+                                                        ).map(
+                                                            (departmentGroup) => (
+                                                                <div
+                                                                    key={`${group.companyId}-${departmentGroup.departmentId ?? 'none'}`}
+                                                                    className="overflow-hidden rounded-lg border border-sidebar-border/70 bg-card shadow-sm"
+                                                                >
+                                                                    <div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-4 py-3">
+                                                                        <h4 className="font-semibold">
+                                                                            {
+                                                                                departmentGroup.departmentName
+                                                                            }{' '}
+                                                                            Department
+                                                                        </h4>
+                                                                        <Badge variant="secondary">
+                                                                            {
+                                                                                departmentGroup
+                                                                                    .students
+                                                                                    .length
+                                                                            }{' '}
+                                                                            {departmentGroup
+                                                                                .students
+                                                                                .length ===
+                                                                            1
+                                                                                ? 'intern'
+                                                                                : 'interns'}
+                                                                        </Badge>
+                                                                    </div>
+                                                                    <div className="p-4">
+                                                                        <CoordinatorStudentsTable
+                                                                            students={
+                                                                                departmentGroup.students
                                                                             }
-                                                                            className="border-b last:border-b-0"
-                                                                        >
-                                                                            <td className="px-4 py-3">
-                                                                                <div className="font-medium">
-                                                                                    {
-                                                                                        student.full_name
-                                                                                    }
-                                                                                </div>
-                                                                                <div className="text-xs text-muted-foreground">
-                                                                                    Student
-                                                                                    ID:{' '}
-                                                                                    {
-                                                                                        student.student_number
-                                                                                    }
-                                                                                </div>
-                                                                            </td>
-                                                                            <td className="px-4 py-3 text-muted-foreground">
-                                                                                {
-                                                                                    student.email
-                                                                                }
-                                                                            </td>
-                                                                            <td className="px-4 py-3">
-                                                                                {student.department ? (
-                                                                                    student
-                                                                                        .department
-                                                                                        .name
-                                                                                ) : (
-                                                                                    <span className="text-muted-foreground">
-                                                                                        —
-                                                                                    </span>
-                                                                                )}
-                                                                            </td>
-                                                                            <td className="px-4 py-3">
-                                                                                {student.supervisor ? (
-                                                                                    student
-                                                                                        .supervisor
-                                                                                        .name
-                                                                                ) : (
-                                                                                    <span className="text-muted-foreground">
-                                                                                        —
-                                                                                    </span>
-                                                                                )}
-                                                                            </td>
-                                                                            <td className="px-4 py-3">
-                                                                                {student.ojt_start_date ? (
-                                                                                    <span>
-                                                                                        {formatOjtStartDate(
-                                                                                            student.ojt_start_date,
-                                                                                        )}
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span className="text-muted-foreground">
-                                                                                        Not started
-                                                                                    </span>
-                                                                                )}
-                                                                            </td>
-                                                                            <td className="px-4 py-3">
-                                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                                    {student.has_submitted_documents ? (
-                                                                                        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                                                                                            <FileText className="mr-1 size-3" />
-                                                                                            {
-                                                                                                student.documents_count
-                                                                                            }{' '}
-                                                                                            submitted
-                                                                                        </Badge>
-                                                                                    ) : (
-                                                                                        <Badge variant="secondary">
-                                                                                            None yet
-                                                                                        </Badge>
-                                                                                    )}
-                                                                                    {notificationsReady &&
-                                                                                    hasUnreadDocumentSubmission(
-                                                                                        student,
-                                                                                        documentSeenMap,
-                                                                                    ) ? (
-                                                                                        <Badge className="bg-brand text-brand-foreground hover:bg-brand">
-                                                                                            New
-                                                                                        </Badge>
-                                                                                    ) : null}
-                                                                                </div>
-                                                                            </td>
-                                                                            <td className="px-4 py-3">
-                                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                                    {student.evaluation_status ===
-                                                                                    'pending_supervisor' ? (
-                                                                                        <Badge variant="secondary">
-                                                                                            Awaiting
-                                                                                            supervisor
-                                                                                        </Badge>
-                                                                                    ) : student.has_new_completed_evaluation ? (
-                                                                                        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
-                                                                                            Done
-                                                                                        </Badge>
-                                                                                    ) : student.evaluation_status ===
-                                                                                      'completed' ? (
-                                                                                        <Badge variant="outline">
-                                                                                            Completed
-                                                                                        </Badge>
-                                                                                    ) : (
-                                                                                        <Badge variant="secondary">
-                                                                                            None
-                                                                                        </Badge>
-                                                                                    )}
-                                                                                    {student.has_new_completed_evaluation ? (
-                                                                                        <span
-                                                                                            className="size-2.5 rounded-full bg-red-600"
-                                                                                            title="New completed evaluation"
-                                                                                        />
-                                                                                    ) : null}
-                                                                                </div>
-                                                                            </td>
-                                                                            <td className="px-4 py-3">
-                                                                                <Badge
-                                                                                    variant={
-                                                                                        student.is_active
-                                                                                            ? 'default'
-                                                                                            : 'secondary'
-                                                                                    }
-                                                                                    className={
-                                                                                        student.is_active
-                                                                                            ? 'bg-brand text-brand-foreground'
-                                                                                            : undefined
-                                                                                    }
-                                                                                >
-                                                                                    {student.is_active
-                                                                                        ? 'Active'
-                                                                                        : 'Inactive'}
-                                                                                </Badge>
-                                                                            </td>
-                                                                            <td className="px-4 py-3 text-right">
-                                                                                <div className="flex items-center justify-end gap-2">
-                                                                                    <CoordinatorStudentRowActions
-                                                                                        student={
-                                                                                            student
-                                                                                        }
-                                                                                    />
-                                                                                    <Button
-                                                                                        asChild
-                                                                                        variant="outline"
-                                                                                        size="sm"
-                                                                                    >
-                                                                                        <Link
-                                                                                            href={show(
-                                                                                                student.id,
-                                                                                            )}
-                                                                                            prefetch
-                                                                                            onClick={() => {
-                                                                                                handleViewStudent(
-                                                                                                    student,
-                                                                                                );
-
-                                                                                                if (
-                                                                                                    student.has_new_completed_evaluation
-                                                                                                ) {
-                                                                                                    markCompletedAlertsSeen();
-                                                                                                }
-                                                                                            }}
-                                                                                        >
-                                                                                            <Eye className="mr-1 size-3.5" />
-                                                                                            View
-                                                                                        </Link>
-                                                                                    </Button>
-                                                                                </div>
-                                                                            </td>
-                                                                        </tr>
-                                                                    ),
-                                                                )}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
+                                                                            showDepartmentColumn={
+                                                                                false
+                                                                            }
+                                                                            notificationsReady={
+                                                                                notificationsReady
+                                                                            }
+                                                                            documentSeenMap={
+                                                                                documentSeenMap
+                                                                            }
+                                                                            needsPlacement={
+                                                                                needsPlacement
+                                                                            }
+                                                                            onAssignPlacement={
+                                                                                openPlacementModal
+                                                                            }
+                                                                            onViewStudent={
+                                                                                handleViewStudent
+                                                                            }
+                                                                            onMarkCompletedAlertsSeen={
+                                                                                markCompletedAlertsSeen
+                                                                            }
+                                                                            formatOjtStartDate={
+                                                                                formatOjtStartDate
+                                                                            }
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            ),
+                                                        )
+                                                    )}
                                                 </div>
                                             </CollapsibleContent>
                                         </Card>
@@ -1043,6 +965,20 @@ export default function CoordinatorStudents() {
                     </div>
                 )}
             </AppModal>
+
+            <CoordinatorPlacementModal
+                student={placementStudent}
+                companies={companies}
+                supervisors={supervisors}
+                open={placementModalOpen}
+                onOpenChange={(open) => {
+                    setPlacementModalOpen(open);
+
+                    if (!open) {
+                        setPlacementStudent(null);
+                    }
+                }}
+            />
         </>
     );
 }

@@ -145,3 +145,20 @@
         @apply bg-background text-foreground;
     }
 }
+
+@keyframes placement-alert-blink {
+    0%,
+    100% {
+        border-color: rgb(239 68 68 / 0.55);
+        box-shadow: 0 0 0 0 rgb(239 68 68 / 0.35);
+    }
+
+    50% {
+        border-color: rgb(239 68 68);
+        box-shadow: 0 0 0 4px rgb(239 68 68 / 0.2);
+    }
+}
+
+.animate-placement-alert-blink {
+    animation: placement-alert-blink 1.2s ease-in-out infinite;
+}

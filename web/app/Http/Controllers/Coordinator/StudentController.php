@@ -38,6 +38,8 @@ class StudentController extends Controller
         return Inertia::render('coordinator/students', [
             'section' => $this->coordinatorSectionPayload($section),
             'students' => $students,
+            'companies' => $this->companyOptions($section),
+            'supervisors' => $this->supervisorOptions($section),
             'evaluation_stats' => $this->evaluationStats($section),
             'evaluation_templates' => $this->evaluationTemplateOptions($section),
             'evaluation_alerts' => $section !== null
