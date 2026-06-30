@@ -17,6 +17,10 @@ import {
     CoordinatorStudentTaskJournal,
     type TaskPhotoDay,
 } from '@/components/coordinator/coordinator-student-task-journal';
+import {
+    CoordinatorStudentAttendanceJournal,
+    type AttendanceJournal,
+} from '@/components/coordinator/coordinator-student-attendance-journal';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -151,6 +155,7 @@ type Props = {
     evaluation_templates: EvaluationTemplateOption[];
     can_open_evaluation: boolean;
     task_photo_journal: TaskPhotoDay[];
+    attendance_journal: AttendanceJournal;
 };
 
 function formatFileSize(bytes: number | null): string {
@@ -193,6 +198,7 @@ export default function CoordinatorStudentShow() {
         evaluation_templates,
         can_open_evaluation,
         task_photo_journal,
+        attendance_journal,
     } = usePage<Props>().props;
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showOpenEvaluationModal, setShowOpenEvaluationModal] = useState(false);
@@ -544,6 +550,10 @@ export default function CoordinatorStudentShow() {
                     studentId={student.id}
                     days={task_photo_journal}
                     studentName={student.full_name}
+                />
+
+                <CoordinatorStudentAttendanceJournal
+                    journal={attendance_journal}
                 />
 
                 <Card className="border-sidebar-border/70 shadow-sm">

@@ -13,7 +13,9 @@ import {
     fetchInternTimeStatus,
     punchInternTime,
 } from '../api/time';
+import { fetchInternAbsences } from '../api/absences';
 import { ApiError } from '../api/client';
+import { AbsenceJustificationCard } from '../components/AbsenceJustificationCard';
 import { EmbeddedFaceScanner } from '../components/EmbeddedFaceScanner';
 import { SessionTaskPhotos } from '../components/SessionTaskPhotos';
 import { PUNCH_COOLDOWN_MS } from '../constants/face';
@@ -37,6 +39,7 @@ import {
     isWithinGeofence,
 } from '../utils/geofence';
 import type { StoredSession } from '../types/auth';
+import type { OjtAbsenceRecord } from '../types/absence';
 import type { InternTimeStatusResponse, TimeLogSegment } from '../types/time';
 
 type Props = {
@@ -118,19 +121,35 @@ function StatusHeader({
     timeInLabel,
     showSession,
     sessionHint,
+    attendanceCaption,
+    isAbsentToday,
 }: {
     todayMinutes: number;
     isTimedIn: boolean;
     timeInLabel: string;
     showSession: boolean;
     sessionHint: string | null;
+    attendanceCaption: string;
+    isAbsentToday: boolean;
 }) {
     return (
         <View style={styles.statusHeader}>
-            <Text style={styles.todayValue}>
+            <Text
+                style={[
+                    styles.todayValue,
+                    isAbsentToday && styles.todayValueAbsent,
+                ]}
+            >
                 {formatDurationMinutes(todayMinutes)}
             </Text>
-            <Text style={styles.todayCaption}>logged today</Text>
+            <Text
+                style={[
+                    styles.todayCaption,
+                    isAbsentToday && styles.todayCaptionAbsent,
+                ]}
+            >
+                {attendanceCaption}
+            </Text>
             {showSession ? (
                 <View style={styles.sessionRow}>
                     {isTimedIn ? <View style={styles.sessionDot} /> : null}
@@ -308,6 +327,9 @@ export function TimeScreen({ session }: Props) {
     const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
     const [vicinityStatus, setVicinityStatus] =
         useState<VicinityStatus>('idle');
+    const [pendingAbsences, setPendingAbsences] = useState<OjtAbsenceRecord[]>(
+        [],
+    );
     const punchCooldownUntilRef = useRef(0);
     const vicinityCheckInFlightRef = useRef(false);
     const punchInFlightRef = useRef(false);
@@ -329,6 +351,21 @@ export function TimeScreen({ session }: Props) {
         [userId],
     );
 
+    const loadAbsences = useCallback(async () => {
+        try {
+            const response = await fetchInternAbsences(session.accessToken);
+            setPendingAbsences(
+                response.absences.filter((absence) => absence.needs_justification),
+            );
+            console.log('Time screen absences loaded', {
+                pending: response.pending_justification_count,
+                todayStatus: response.today_attendance.status,
+            });
+        } catch (error) {
+            console.log('Time screen absences load failed', error);
+        }
+    }, [session.accessToken]);
+
     const loadStatus = useCallback(async () => {
         try {
             const response = await fetchInternTimeStatus(session.accessToken);
@@ -344,8 +381,11 @@ export function TimeScreen({ session }: Props) {
             console.log('Time screen status refreshed', {
                 canPunchIn: response.can_punch_in,
                 canPunchOut: response.can_punch_out,
+                todayAttendance: response.today_attendance?.status,
                 hasLocalEmbedding: enrolledEmbeddingRef.current !== null,
             });
+
+            void loadAbsences();
         } catch (error) {
             const message =
                 error instanceof ApiError
@@ -356,7 +396,7 @@ export function TimeScreen({ session }: Props) {
         } finally {
             setIsLoading(false);
         }
-    }, [session.accessToken, syncEnrolledEmbedding]);
+    }, [session.accessToken, syncEnrolledEmbedding, loadAbsences]);
 
     useEffect(() => {
         loadStatus();
@@ -735,6 +775,16 @@ export function TimeScreen({ session }: Props) {
         isWorking ||
         cooldownSecondsLeft > 0 ||
         (!status?.can_punch_in && !status?.can_punch_out);
+    const todayAttendance = status?.today_attendance;
+    const isAbsentToday = todayAttendance?.status === 'absent';
+    const attendanceCaption =
+        todayAttendance?.status === 'absent'
+            ? 'Absent today · 0 hr logged'
+            : todayAttendance?.status === 'off_schedule'
+              ? 'No OJT scheduled today'
+              : todayAttendance?.status === 'not_started'
+                ? 'OJT not started'
+                : 'logged today';
 
     return (
         <View style={styles.page}>
@@ -750,7 +800,20 @@ export function TimeScreen({ session }: Props) {
                     timeInLabel={timeInLabel}
                     showSession={faceEnrolled}
                     sessionHint={cooldownHint ?? lunchHint}
+                    attendanceCaption={attendanceCaption}
+                    isAbsentToday={isAbsentToday}
                 />
+
+                {pendingAbsences.map((absence) => (
+                    <AbsenceJustificationCard
+                        key={absence.id}
+                        accessToken={session.accessToken}
+                        absence={absence}
+                        onSubmitted={() => {
+                            void loadStatus();
+                        }}
+                    />
+                ))}
 
                 {faceEnrolled &&
                 geofenceRequired &&
@@ -913,6 +976,13 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '500',
         color: colors.textMuted,
+    },
+    todayValueAbsent: {
+        color: colors.error,
+    },
+    todayCaptionAbsent: {
+        color: colors.error,
+        fontWeight: '600',
     },
     sessionRow: {
         flexDirection: 'row',

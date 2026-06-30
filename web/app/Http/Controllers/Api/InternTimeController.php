@@ -79,6 +79,7 @@ class InternTimeController extends Controller
     private function internStudent(int $userId): Student
     {
         return Student::query()
+            ->with('ojtSchedule')
             ->where('user_id', $userId)
             ->firstOrFail();
     }

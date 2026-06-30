@@ -41,6 +41,22 @@ export type LunchNotice = {
     can_time_in_now: boolean;
 };
 
+export type TodayAttendance = {
+    status:
+        | 'present'
+        | 'pending'
+        | 'absent'
+        | 'off_schedule'
+        | 'not_started';
+    label: string;
+    minutes: number;
+    hours: number;
+    is_scheduled_today: boolean;
+    schedule_label: string | null;
+    absence_id: number | null;
+    needs_justification: boolean;
+};
+
 export type GeofenceInfo = {
     required: boolean;
     enabled: boolean;
@@ -63,6 +79,7 @@ export type InternTimeStatusResponse = {
     today_hours: number;
     lunch_break?: LunchBreakInfo;
     lunch_notice?: LunchNotice | null;
+    today_attendance?: TodayAttendance;
     geofence?: GeofenceInfo;
 };
 

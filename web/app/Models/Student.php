@@ -115,7 +115,15 @@ class Student extends Model
     }
 
     /**
-     * @return HasMany<OjtEvaluation, $this>
+     * @return HasMany<OjtAbsence, $this>
+     */
+    public function ojtAbsences(): HasMany
+    {
+        return $this->hasMany(OjtAbsence::class);
+    }
+
+    /**
+     * @return HasOne<OjtEvaluation, $this>
      */
     public function ojtEvaluations(): HasMany
     {

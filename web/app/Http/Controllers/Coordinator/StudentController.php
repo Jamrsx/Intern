@@ -9,6 +9,7 @@ use App\Http\Requests\Coordinator\BulkStoreStudentRequest;
 use App\Http\Requests\Coordinator\StoreStudentRequest;
 use App\Http\Requests\Coordinator\UpdateCoordinatorStudentRequest;
 use App\Models\Company;
+use App\Models\OjtAbsence;
 use App\Models\OjtEvaluation;
 use App\Models\Section;
 use App\Models\Student;
@@ -18,6 +19,7 @@ use App\Models\TimeLogTaskPhoto;
 use App\Support\EvaluationAlertService;
 use App\Support\OjtProgressCalculator;
 use App\Support\StudentAccountService;
+use App\Support\StudentAttendanceJournal;
 use App\Support\StudentTaskPhotoJournal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +63,7 @@ class StudentController extends Controller
             'department:id,name,company_id',
             'supervisor.user:id,name',
             'documents.documentType:id,code,name,is_required',
+            'ojtSchedule',
         ])->loadCount('documents');
 
         $requiredHours = (int) $section->course->required_hours;
@@ -103,6 +106,13 @@ class StudentController extends Controller
                 fn (TimeLogTaskPhoto $photo) => route('coordinators.students.task-photos.show', [
                     'student' => $student,
                     'taskPhoto' => $photo,
+                ]),
+            ),
+            'attendance_journal' => StudentAttendanceJournal::forStudent(
+                $student,
+                fn (OjtAbsence $absence) => route('coordinators.students.absences.proof.show', [
+                    'student' => $student,
+                    'absence' => $absence,
                 ]),
             ),
         ]);
@@ -359,6 +369,27 @@ class StudentController extends Controller
             [
                 'Content-Type' => $taskPhoto->mime_type,
                 'Content-Disposition' => 'inline; filename="'.$taskPhoto->original_filename.'"',
+            ],
+        );
+    }
+
+    public function showAbsenceProof(
+        Request $request,
+        Student $student,
+        OjtAbsence $absence,
+    ) {
+        $section = $this->coordinatorSectionOrFail($request);
+        $this->ensureStudentInSection($student, $section);
+
+        abort_unless($absence->student_id === $student->id, 404);
+        abort_unless($absence->proof_file_path !== null, 404);
+        abort_unless(Storage::disk('local')->exists($absence->proof_file_path), 404);
+
+        return response()->file(
+            Storage::disk('local')->path($absence->proof_file_path),
+            [
+                'Content-Type' => $absence->proof_mime_type ?? 'image/jpeg',
+                'Content-Disposition' => 'inline; filename="'.($absence->proof_original_filename ?? 'proof.jpg').'"',
             ],
         );
     }

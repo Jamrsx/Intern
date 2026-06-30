@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\InternAbsenceController;
 use App\Http\Controllers\Api\InternDocumentController;
 use App\Http\Controllers\Api\InternDocumentRequirementController;
 use App\Http\Controllers\Api\InternFaceController;
@@ -36,6 +37,9 @@ Route::middleware('auth:api')->prefix('intern')->group(function (): void {
     Route::post('/time/logs/{timeLog}/task-photos', [InternTimeTaskPhotoController::class, 'store']);
     Route::get('/time/logs/{timeLog}/task-photos/{taskPhoto}', [InternTimeTaskPhotoController::class, 'show']);
     Route::delete('/time/logs/{timeLog}/task-photos/{taskPhoto}', [InternTimeTaskPhotoController::class, 'destroy']);
+    Route::get('/absences', [InternAbsenceController::class, 'index']);
+    Route::post('/absences/{absence}/justify', [InternAbsenceController::class, 'justify']);
+    Route::get('/absences/{absence}/proof', [InternAbsenceController::class, 'showProof']);
     Route::post('/face/enroll', [InternFaceController::class, 'enroll']);
 });
 

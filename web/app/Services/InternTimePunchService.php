@@ -17,6 +17,7 @@ class InternTimePunchService
         private readonly LunchAutoTimeoutService $lunchAutoTimeoutService,
         private readonly CompanyGeofenceGuard $companyGeofenceGuard,
         private readonly TimeLogTaskPhotoService $timeLogTaskPhotoService,
+        private readonly OjtAbsenceSyncService $ojtAbsenceSyncService,
     ) {}
 
     /**
@@ -51,6 +52,7 @@ class InternTimePunchService
         });
 
         $blockedByLunchWindow = LunchBreak::isWithinLunchBreakWindow(now());
+        $todayAttendance = $this->ojtAbsenceSyncService->todayAttendancePayload($student);
 
         return [
             'face_enrolled' => $faceProfile !== null,
@@ -67,6 +69,7 @@ class InternTimePunchService
             'today_segments' => $todayLogs->map(fn (TimeLog $log) => $this->logPayload($log))->values()->all(),
             'today_minutes' => $todayMinutes,
             'today_hours' => round($todayMinutes / 60, 2),
+            'today_attendance' => $todayAttendance,
             'lunch_break' => LunchBreak::toStatusPayload(),
             'lunch_notice' => $this->lunchAutoTimeoutService->currentNotice($student, $justApplied),
             'geofence' => $this->companyGeofenceGuard->statusPayload($student),
