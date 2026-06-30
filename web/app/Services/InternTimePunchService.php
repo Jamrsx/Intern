@@ -16,6 +16,7 @@ class InternTimePunchService
     public function __construct(
         private readonly LunchAutoTimeoutService $lunchAutoTimeoutService,
         private readonly CompanyGeofenceGuard $companyGeofenceGuard,
+        private readonly TimeLogTaskPhotoService $timeLogTaskPhotoService,
     ) {}
 
     /**
@@ -200,6 +201,7 @@ class InternTimePunchService
 
         $log = TimeLog::query()->create([
             'student_id' => $student->id,
+            'session_period' => TimeLogTaskPhotoService::resolveSessionPeriod($timeIn),
             'time_in' => $timeIn,
             'verification_method' => 'facial_recognition_embedded',
             'face_match_score' => $distance,
@@ -229,8 +231,12 @@ class InternTimePunchService
             ]);
         }
 
+        $this->timeLogTaskPhotoService->assertHasDraftPhotos($openLog);
+
         $timeOut = now();
         $durationMinutes = (int) $openLog->time_in->diffInMinutes($timeOut);
+
+        $this->timeLogTaskPhotoService->finalizeForLog($openLog);
 
         $openLog->update([
             'time_out' => $timeOut,
@@ -266,8 +272,9 @@ class InternTimePunchService
             $durationMinutes = (int) $log->time_in->diffInMinutes(now());
         }
 
-        return [
+        $payload = [
             'id' => $log->id,
+            'session_period' => $log->session_period,
             'time_in' => $log->time_in->toIso8601String(),
             'time_out' => $log->time_out?->toIso8601String(),
             'duration_minutes' => $durationMinutes,
@@ -280,6 +287,14 @@ class InternTimePunchService
                 : null,
             'is_open' => $log->time_out === null,
             'is_auto_lunch' => $log->verification_method === 'auto_lunch_timeout',
+            'submitted_task_photos_count' => $this->timeLogTaskPhotoService->submittedCount($log),
         ];
+
+        if ($log->time_out === null) {
+            $payload['task_photos'] = $this->timeLogTaskPhotoService->draftPhotosPayload($log, true);
+            $payload['task_photos_count'] = count($payload['task_photos']);
+        }
+
+        return $payload;
     }
 }

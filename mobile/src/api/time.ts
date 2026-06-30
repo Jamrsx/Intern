@@ -1,10 +1,15 @@
 import { getApiBaseUrl } from '../config/api.environment';
 import { ApiError } from './client';
+import ReactNativeBlobUtil from 'react-native-blob-util';
+import type { ImageSourcePropType } from 'react-native';
 import type {
     InternFaceEnrollResponse,
     InternTimeLogsResponse,
     InternTimePunchResponse,
     InternTimeStatusResponse,
+    PickedTaskPhoto,
+    TimeLogTaskPhoto,
+    UploadTimeLogTaskPhotoResponse,
 } from '../types/time';
 
 async function parseJsonResponse(
@@ -33,6 +38,7 @@ function buildValidationError(
         (typeof payload?.message === 'string' ? payload.message : null) ??
         fieldErrors.embedding?.[0] ??
         fieldErrors.action?.[0] ??
+        fieldErrors.task_photos?.[0] ??
         fieldErrors.latitude?.[0] ??
         fallback;
 
@@ -198,4 +204,120 @@ export async function punchInternTime(
     }
 
     return payload as InternTimePunchResponse;
+}
+
+export async function uploadTimeLogTaskPhoto(
+    token: string,
+    timeLogId: number,
+    file: PickedTaskPhoto,
+): Promise<UploadTimeLogTaskPhotoResponse> {
+    const url = `${getApiBaseUrl()}/api/intern/time/logs/${timeLogId}/task-photos`;
+    const filePath = file.uri.startsWith('file://')
+        ? file.uri
+        : `file://${file.uri}`;
+
+    console.log('API upload task photo', {
+        url,
+        timeLogId,
+        filename: file.name,
+        filePath,
+    });
+
+    const response = await ReactNativeBlobUtil.fetch(
+        'POST',
+        url,
+        {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+            'Content-Type': 'multipart/form-data',
+        },
+        [
+            {
+                name: 'file',
+                filename: file.name,
+                type: file.type,
+                data: ReactNativeBlobUtil.wrap(filePath),
+            },
+        ],
+    );
+
+    const status = response.info().status;
+    const rawBody = await response.text();
+    let payload: Record<string, unknown> | null = null;
+
+    try {
+        payload = JSON.parse(rawBody) as Record<string, unknown>;
+    } catch {
+        payload = null;
+    }
+
+    if (status < 200 || status >= 300) {
+        console.log('Task photo upload failed', {
+            status,
+            body: rawBody.slice(0, 300),
+        });
+        throw buildValidationError(
+            payload,
+            'Unable to upload task photo.',
+            status,
+        );
+    }
+
+    console.log('Task photo uploaded', {
+        id: (payload as UploadTimeLogTaskPhotoResponse | null)?.photo?.id,
+        fileSize: (payload as UploadTimeLogTaskPhotoResponse | null)?.photo
+            ?.file_size,
+    });
+
+    return payload as UploadTimeLogTaskPhotoResponse;
+}
+
+export async function deleteTimeLogTaskPhoto(
+    token: string,
+    timeLogId: number,
+    photoId: number,
+): Promise<void> {
+    const url = `${getApiBaseUrl()}/api/intern/time/logs/${timeLogId}/task-photos/${photoId}`;
+
+    console.log('API delete task photo', { url, timeLogId, photoId });
+
+    const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    const payload = await parseJsonResponse(response);
+
+    if (!response.ok) {
+        throw buildValidationError(
+            payload,
+            'Unable to remove task photo.',
+            response.status,
+        );
+    }
+
+    console.log('Task photo deleted', { photoId });
+}
+
+export function buildTaskPhotoImageSource(
+    photo: TimeLogTaskPhoto,
+    accessToken: string,
+): ImageSourcePropType | null {
+    if (photo.time_log_id && photo.id) {
+        return {
+            uri: `${getApiBaseUrl()}/api/intern/time/logs/${photo.time_log_id}/task-photos/${photo.id}`,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        };
+    }
+
+    if (photo.local_uri) {
+        return { uri: photo.local_uri };
+    }
+
+    return null;
 }

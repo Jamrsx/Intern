@@ -14,9 +14,11 @@ use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentDocument;
 use App\Models\Supervisor;
+use App\Models\TimeLogTaskPhoto;
 use App\Support\EvaluationAlertService;
 use App\Support\OjtProgressCalculator;
 use App\Support\StudentAccountService;
+use App\Support\StudentTaskPhotoJournal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -96,6 +98,13 @@ class StudentController extends Controller
                     ->where('student_id', $student->id)
                     ->where('status', OjtEvaluation::STATUS_PENDING)
                     ->exists(),
+            'task_photo_journal' => StudentTaskPhotoJournal::forStudent(
+                $student,
+                fn (TimeLogTaskPhoto $photo) => route('coordinators.students.task-photos.show', [
+                    'student' => $student,
+                    'taskPhoto' => $photo,
+                ]),
+            ),
         ]);
     }
 
@@ -328,6 +337,28 @@ class StudentController extends Controller
             [
                 'Content-Type' => $document->mime_type,
                 'Content-Disposition' => 'inline; filename="'.$document->original_filename.'"',
+            ],
+        );
+    }
+
+    public function showTaskPhoto(
+        Request $request,
+        Student $student,
+        TimeLogTaskPhoto $taskPhoto,
+    ): StreamedResponse {
+        $section = $this->coordinatorSectionOrFail($request);
+        $this->ensureStudentInSection($student, $section);
+
+        abort_unless($taskPhoto->student_id === $student->id, 404);
+        abort_unless($taskPhoto->status === TimeLogTaskPhoto::STATUS_SUBMITTED, 404);
+        abort_unless(Storage::disk('local')->exists($taskPhoto->file_path), 404);
+
+        return Storage::disk('local')->response(
+            $taskPhoto->file_path,
+            $taskPhoto->original_filename,
+            [
+                'Content-Type' => $taskPhoto->mime_type,
+                'Content-Disposition' => 'inline; filename="'.$taskPhoto->original_filename.'"',
             ],
         );
     }

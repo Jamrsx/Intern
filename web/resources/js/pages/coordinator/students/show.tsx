@@ -13,6 +13,10 @@ import {
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { markStudentDocumentsAsSeen } from '@/lib/coordinator-document-notifications';
 import InputError from '@/components/input-error';
+import {
+    CoordinatorStudentTaskJournal,
+    type TaskPhotoDay,
+} from '@/components/coordinator/coordinator-student-task-journal';
 import { AppModal } from '@/components/superadmin/app-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -146,6 +150,7 @@ type Props = {
     evaluations: EvaluationRow[];
     evaluation_templates: EvaluationTemplateOption[];
     can_open_evaluation: boolean;
+    task_photo_journal: TaskPhotoDay[];
 };
 
 function formatFileSize(bytes: number | null): string {
@@ -187,6 +192,7 @@ export default function CoordinatorStudentShow() {
         evaluations,
         evaluation_templates,
         can_open_evaluation,
+        task_photo_journal,
     } = usePage<Props>().props;
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showOpenEvaluationModal, setShowOpenEvaluationModal] = useState(false);
@@ -213,6 +219,7 @@ export default function CoordinatorStudentShow() {
         evaluationCount: evaluations.length,
         evaluationTemplateCount: evaluation_templates.length,
         can_open_evaluation,
+        taskPhotoDayCount: task_photo_journal.length,
     });
 
     useLayoutEffect(() => {
@@ -532,6 +539,12 @@ export default function CoordinatorStudentShow() {
                         </CardContent>
                     </Card>
                 </div>
+
+                <CoordinatorStudentTaskJournal
+                    studentId={student.id}
+                    days={task_photo_journal}
+                    studentName={student.full_name}
+                />
 
                 <Card className="border-sidebar-border/70 shadow-sm">
                     <CardHeader>

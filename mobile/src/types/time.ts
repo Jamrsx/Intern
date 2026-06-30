@@ -1,5 +1,6 @@
 export type TimeLogSegment = {
     id: number;
+    session_period?: 'morning' | 'afternoon' | null;
     time_in: string;
     time_out: string | null;
     duration_minutes: number | null;
@@ -8,6 +9,22 @@ export type TimeLogSegment = {
     face_match_score: number | null;
     is_open: boolean;
     is_auto_lunch?: boolean;
+    task_photos?: TimeLogTaskPhoto[];
+    task_photos_count?: number;
+    submitted_task_photos_count?: number;
+};
+
+export type TimeLogTaskPhoto = {
+    id: number;
+    time_log_id: number;
+    original_filename: string;
+    file_size: number | null;
+    mime_type: string;
+    status: 'draft' | 'submitted';
+    submitted_at: string | null;
+    created_at: string | null;
+    image_url?: string | null;
+    local_uri?: string;
 };
 
 export type LunchBreakInfo = {
@@ -57,6 +74,17 @@ export type InternTimeLogsResponse = {
 export type InternTimePunchResponse = {
     message: string;
     log: TimeLogSegment;
+};
+
+export type UploadTimeLogTaskPhotoResponse = {
+    message: string;
+    photo: TimeLogTaskPhoto;
+};
+
+export type PickedTaskPhoto = {
+    uri: string;
+    name: string;
+    type: string;
 };
 
 export type InternFaceEnrollResponse = {

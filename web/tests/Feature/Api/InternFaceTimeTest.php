@@ -4,9 +4,11 @@ use App\Models\Company;
 use App\Models\OjtSchedule;
 use App\Models\StudentFaceProfile;
 use App\Models\TimeLog;
+use App\Models\TimeLogTaskPhoto;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\SchoolYearSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Laravel\Passport\Passport;
 
@@ -18,6 +20,13 @@ uses(RefreshDatabase::class);
 function fakeFaceEmbedding(float $value = 0.1): array
 {
     return array_fill(0, 128, $value);
+}
+
+function uploadTaskPhotoForOpenLog($test, int $timeLogId): void
+{
+    $test->post("/api/intern/time/logs/{$timeLogId}/task-photos", [
+        'file' => UploadedFile::fake()->image('task.jpg'),
+    ])->assertSuccessful();
 }
 
 it('returns time status for an intern without face enrollment', function () {
@@ -83,6 +92,8 @@ it('times in and out with embedded facial verification', function () {
     expect($openLog)->not->toBeNull();
     expect($openLog->time_out)->toBeNull();
     expect($openLog->verification_method)->toBe('facial_recognition_embedded');
+
+    uploadTaskPhotoForOpenLog($this, $openLog->id);
 
     $this->postJson('/api/intern/time/punch', [
         'action' => 'time_out',
@@ -269,6 +280,13 @@ it('auto times out a morning session at noon and blocks time in until 1pm', func
     ])->assertSuccessful();
 
     Carbon::setTestNow(Carbon::parse('2026-06-10 17:00:00', 'Asia/Manila'));
+
+    $afternoonLog = TimeLog::query()
+        ->where('student_id', $student->id)
+        ->whereNull('time_out')
+        ->firstOrFail();
+
+    uploadTaskPhotoForOpenLog($this, $afternoonLog->id);
 
     $this->postJson('/api/intern/time/punch', [
         'action' => 'time_out',

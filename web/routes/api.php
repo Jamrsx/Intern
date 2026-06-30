@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\InternPasswordController;
 use App\Http\Controllers\Api\InternProfileController;
 use App\Http\Controllers\Api\InternProgressController;
 use App\Http\Controllers\Api\InternTimeController;
+use App\Http\Controllers\Api\InternTimeTaskPhotoController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -32,6 +33,9 @@ Route::middleware('auth:api')->prefix('intern')->group(function (): void {
     Route::get('/time/status', [InternTimeController::class, 'status']);
     Route::get('/time/logs', [InternTimeController::class, 'logs']);
     Route::post('/time/punch', [InternTimeController::class, 'punch']);
+    Route::post('/time/logs/{timeLog}/task-photos', [InternTimeTaskPhotoController::class, 'store']);
+    Route::get('/time/logs/{timeLog}/task-photos/{taskPhoto}', [InternTimeTaskPhotoController::class, 'show']);
+    Route::delete('/time/logs/{timeLog}/task-photos/{taskPhoto}', [InternTimeTaskPhotoController::class, 'destroy']);
     Route::post('/face/enroll', [InternFaceController::class, 'enroll']);
 });
 

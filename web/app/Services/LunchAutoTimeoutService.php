@@ -8,6 +8,9 @@ use App\Support\LunchBreak;
 
 class LunchAutoTimeoutService
 {
+    public function __construct(
+        private readonly TimeLogTaskPhotoService $timeLogTaskPhotoService,
+    ) {}
     /**
      * @return array<string, mixed>|null
      */
@@ -32,6 +35,8 @@ class LunchAutoTimeoutService
         }
 
         $durationMinutes = (int) $openLog->time_in->diffInMinutes($lunchAt);
+
+        $this->timeLogTaskPhotoService->finalizeForLog($openLog);
 
         $openLog->update([
             'time_out' => $lunchAt,

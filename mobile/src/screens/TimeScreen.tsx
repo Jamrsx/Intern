@@ -15,6 +15,7 @@ import {
 } from '../api/time';
 import { ApiError } from '../api/client';
 import { EmbeddedFaceScanner } from '../components/EmbeddedFaceScanner';
+import { SessionTaskPhotos } from '../components/SessionTaskPhotos';
 import { PUNCH_COOLDOWN_MS } from '../constants/face';
 import { euclideanDistance, faceMatches } from '../face/faceMatcher';
 import {
@@ -266,6 +267,14 @@ function SegmentRow({ segment }: { segment: TimeLogSegment }) {
           ? formatDurationMinutes(segment.duration_minutes)
           : '';
 
+    const photoNote =
+        segment.submitted_task_photos_count != null &&
+        segment.submitted_task_photos_count > 0
+            ? ` · ${segment.submitted_task_photos_count} photo${
+                  segment.submitted_task_photos_count === 1 ? '' : 's'
+              }`
+            : '';
+
     return (
         <View style={styles.segmentRow}>
             <Text style={styles.segmentTime}>
@@ -273,6 +282,7 @@ function SegmentRow({ segment }: { segment: TimeLogSegment }) {
                 {segment.time_out
                     ? ` – ${formatClock(segment.time_out)}`
                     : ' – now'}
+                {photoNote}
             </Text>
             <Text
                 style={[
@@ -838,6 +848,16 @@ export function TimeScreen({ session }: Props) {
                                 }
                             />
                         )}
+
+                        {isTimedIn && status?.open_log ? (
+                            <SessionTaskPhotos
+                                key={status.open_log.id}
+                                accessToken={session.accessToken}
+                                timeLogId={status.open_log.id}
+                                sessionPeriod={status.open_log.session_period}
+                                initialPhotos={status.open_log.task_photos ?? []}
+                            />
+                        ) : null}
 
                         {segments.length > 0 ? (
                             <View style={styles.logCard}>

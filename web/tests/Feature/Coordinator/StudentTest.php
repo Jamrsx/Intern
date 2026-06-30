@@ -181,3 +181,75 @@ it('prevents a dean from mutating students', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page->component('deans/students'));
 });
+
+it('shows submitted task photos grouped by date and session on the student detail page', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    ['coordinator' => $coordinator, 'student' => $student] = createCoordinatorWithSection();
+
+    $morningLog = \App\Models\TimeLog::query()->create([
+        'student_id' => $student->id,
+        'session_period' => 'morning',
+        'time_in' => \Illuminate\Support\Carbon::parse('2026-06-01 08:00:00'),
+        'time_out' => \Illuminate\Support\Carbon::parse('2026-06-01 12:00:00'),
+        'duration_minutes' => 240,
+        'verification_method' => 'facial_recognition_embedded',
+    ]);
+
+    $afternoonLog = \App\Models\TimeLog::query()->create([
+        'student_id' => $student->id,
+        'session_period' => 'afternoon',
+        'time_in' => \Illuminate\Support\Carbon::parse('2026-06-01 13:00:00'),
+        'time_out' => \Illuminate\Support\Carbon::parse('2026-06-01 17:00:00'),
+        'duration_minutes' => 240,
+        'verification_method' => 'facial_recognition_embedded',
+    ]);
+
+    $morningPhoto = \App\Models\TimeLogTaskPhoto::query()->create([
+        'time_log_id' => $morningLog->id,
+        'student_id' => $student->id,
+        'file_path' => 'time-log-task-photos/morning.jpg',
+        'original_filename' => 'morning-task.jpg',
+        'file_size' => 1200,
+        'mime_type' => 'image/jpeg',
+        'status' => \App\Models\TimeLogTaskPhoto::STATUS_SUBMITTED,
+        'submitted_at' => \Illuminate\Support\Carbon::parse('2026-06-01 12:00:00'),
+    ]);
+
+    $afternoonPhoto = \App\Models\TimeLogTaskPhoto::query()->create([
+        'time_log_id' => $afternoonLog->id,
+        'student_id' => $student->id,
+        'file_path' => 'time-log-task-photos/afternoon.jpg',
+        'original_filename' => 'afternoon-task.jpg',
+        'file_size' => 1500,
+        'mime_type' => 'image/jpeg',
+        'status' => \App\Models\TimeLogTaskPhoto::STATUS_SUBMITTED,
+        'submitted_at' => \Illuminate\Support\Carbon::parse('2026-06-01 17:00:00'),
+    ]);
+
+    \Illuminate\Support\Facades\Storage::disk('local')->put('time-log-task-photos/morning.jpg', 'morning-image');
+    \Illuminate\Support\Facades\Storage::disk('local')->put('time-log-task-photos/afternoon.jpg', 'afternoon-image');
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.students.show', $student))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('coordinator/students/show')
+            ->has('task_photo_journal', 1)
+            ->where('task_photo_journal.0.date', '2026-06-01')
+            ->where('task_photo_journal.0.date_label', 'June 1, 2026')
+            ->has('task_photo_journal.0.sessions', 2)
+            ->where('task_photo_journal.0.sessions.0.session_period', 'morning')
+            ->where('task_photo_journal.0.sessions.1.session_period', 'afternoon')
+            ->where('task_photo_journal.0.sessions.0.photos.0.id', $morningPhoto->id)
+            ->where('task_photo_journal.0.sessions.1.photos.0.id', $afternoonPhoto->id));
+
+    $this->actingAs($coordinator)
+        ->get(route('coordinators.students.task-photos.show', [
+            'student' => $student,
+            'taskPhoto' => $morningPhoto,
+        ]))
+        ->assertOk()
+        ->assertHeader('content-type', 'image/jpeg');
+});

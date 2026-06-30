@@ -131,6 +131,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('students/{student}/documents/{document}', [CoordinatorStudentController::class, 'showDocument'])
                 ->name('students.documents.show');
+            Route::get('students/{student}/task-photos/{taskPhoto}', [CoordinatorStudentController::class, 'showTaskPhoto'])
+                ->name('students.task-photos.show');
 
             Route::post('students/{student}/evaluations', [CoordinatorOjtEvaluationController::class, 'store'])
                 ->name('students.evaluations.store');

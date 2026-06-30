@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TimeLog extends Model
 {
@@ -12,6 +13,7 @@ class TimeLog extends Model
      */
     protected $fillable = [
         'student_id',
+        'session_period',
         'time_in',
         'time_out',
         'duration_minutes',
@@ -38,5 +40,13 @@ class TimeLog extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    /**
+     * @return HasMany<TimeLogTaskPhoto, $this>
+     */
+    public function taskPhotos(): HasMany
+    {
+        return $this->hasMany(TimeLogTaskPhoto::class);
     }
 }
