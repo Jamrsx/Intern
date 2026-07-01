@@ -228,6 +228,118 @@ function RoleAssignmentFields({
     );
 }
 
+function LeadersTable({
+    leaders,
+    assignmentLabel,
+    emptyMessage,
+    onEdit,
+    onDeactivate,
+}: {
+    leaders: Leader[];
+    assignmentLabel: string;
+    emptyMessage: string;
+    onEdit: (leader: Leader) => void;
+    onDeactivate: (leader: Leader) => void;
+}) {
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead>
+                    <tr className="border-b bg-muted/40 text-left">
+                        <th className="px-4 py-3 font-medium">Name</th>
+                        <th className="px-4 py-3 font-medium">Email</th>
+                        <th className="px-4 py-3 font-medium">
+                            {assignmentLabel}
+                        </th>
+                        <th className="px-4 py-3 font-medium">Status</th>
+                        <th className="px-4 py-3 text-right font-medium">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {leaders.length === 0 ? (
+                        <tr>
+                            <td
+                                colSpan={5}
+                                className="px-4 py-8 text-center text-muted-foreground"
+                            >
+                                {emptyMessage}
+                            </td>
+                        </tr>
+                    ) : (
+                        leaders.map((leader) => (
+                            <tr
+                                key={leader.id}
+                                className="border-b last:border-0"
+                            >
+                                <td className="px-4 py-3 font-medium">
+                                    {leader.name}
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground">
+                                    {leader.email}
+                                </td>
+                                <td className="px-4 py-3">
+                                    {leader.course || leader.course_major ? (
+                                        <span>
+                                            {formatAssignment(leader)}
+                                        </span>
+                                    ) : (
+                                        <span className="text-muted-foreground">
+                                            Not assigned
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="px-4 py-3">
+                                    <Badge
+                                        variant={
+                                            leader.is_active
+                                                ? 'default'
+                                                : 'secondary'
+                                        }
+                                        className={
+                                            leader.is_active
+                                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300'
+                                                : ''
+                                        }
+                                    >
+                                        {leader.is_active
+                                            ? 'Active'
+                                            : 'Inactive'}
+                                    </Badge>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <div className="flex justify-end gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => onEdit(leader)}
+                                        >
+                                            <Pencil className="size-3.5" />
+                                        </Button>
+                                        {leader.is_active && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="text-red-600 hover:text-red-700"
+                                                onClick={() =>
+                                                    onDeactivate(leader)
+                                                }
+                                            >
+                                                Deactivate
+                                            </Button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 export default function Deans({ leaders, courses }: Props) {
     const [createOpen, setCreateOpen] = useState(false);
     const [editLeader, setEditLeader] = useState<Leader | null>(null);
@@ -284,6 +396,16 @@ export default function Deans({ leaders, courses }: Props) {
         courseCount: courses.length,
     });
 
+    const deanLeaders = useMemo(
+        () => leaders.filter((leader) => leader.role === 'dean'),
+        [leaders],
+    );
+
+    const programHeadLeaders = useMemo(
+        () => leaders.filter((leader) => leader.role === 'program_head'),
+        [leaders],
+    );
+
     const handleDeactivate = (leader: Leader) => {
         if (
             !confirm(
@@ -320,128 +442,33 @@ export default function Deans({ leaders, courses }: Props) {
 
                 <Card className="border-sidebar-border/70">
                     <CardHeader>
-                        <CardTitle>Accounts ({leaders.length})</CardTitle>
+                        <CardTitle>College Deans ({deanLeaders.length})</CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b bg-muted/40 text-left">
-                                        <th className="px-4 py-3 font-medium">
-                                            Name
-                                        </th>
-                                        <th className="px-4 py-3 font-medium">
-                                            Email
-                                        </th>
-                                        <th className="px-4 py-3 font-medium">
-                                            Role
-                                        </th>
-                                        <th className="px-4 py-3 font-medium">
-                                            Assignment
-                                        </th>
-                                        <th className="px-4 py-3 font-medium">
-                                            Status
-                                        </th>
-                                        <th className="px-4 py-3 text-right font-medium">
-                                            Actions
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {leaders.length === 0 ? (
-                                        <tr>
-                                            <td
-                                                colSpan={6}
-                                                className="px-4 py-8 text-center text-muted-foreground"
-                                            >
-                                                No accounts yet. Click Add
-                                                account to create one.
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        leaders.map((leader) => (
-                                            <tr
-                                                key={leader.id}
-                                                className="border-b last:border-0"
-                                            >
-                                                <td className="px-4 py-3 font-medium">
-                                                    {leader.name}
-                                                </td>
-                                                <td className="px-4 py-3 text-muted-foreground">
-                                                    {leader.email}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <Badge variant="secondary">
-                                                        {leader.role_label}
-                                                    </Badge>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {leader.course
-                                                    || leader.course_major ? (
-                                                        <span>
-                                                            {formatAssignment(
-                                                                leader,
-                                                            )}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-muted-foreground">
-                                                            Not assigned
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <Badge
-                                                        variant={
-                                                            leader.is_active
-                                                                ? 'default'
-                                                                : 'secondary'
-                                                        }
-                                                        className={
-                                                            leader.is_active
-                                                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300'
-                                                                : ''
-                                                        }
-                                                    >
-                                                        {leader.is_active
-                                                            ? 'Active'
-                                                            : 'Inactive'}
-                                                    </Badge>
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() =>
-                                                                setEditLeader(
-                                                                    leader,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Pencil className="size-3.5" />
-                                                        </Button>
-                                                        {leader.is_active && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="text-red-600 hover:text-red-700"
-                                                                onClick={() =>
-                                                                    handleDeactivate(
-                                                                        leader,
-                                                                    )
-                                                                }
-                                                            >
-                                                                Deactivate
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                        <LeadersTable
+                            leaders={deanLeaders}
+                            assignmentLabel="Course"
+                            emptyMessage="No college deans yet. Click Add account to create one."
+                            onEdit={setEditLeader}
+                            onDeactivate={handleDeactivate}
+                        />
+                    </CardContent>
+                </Card>
+
+                <Card className="border-sidebar-border/70">
+                    <CardHeader>
+                        <CardTitle>
+                            Program Heads ({programHeadLeaders.length})
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <LeadersTable
+                            leaders={programHeadLeaders}
+                            assignmentLabel="Program"
+                            emptyMessage="No program heads yet. Click Add account and choose Program Head."
+                            onEdit={setEditLeader}
+                            onDeactivate={handleDeactivate}
+                        />
                     </CardContent>
                 </Card>
             </div>

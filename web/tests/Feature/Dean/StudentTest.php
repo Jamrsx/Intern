@@ -201,3 +201,55 @@ it('blocks a dean from adding students to sections outside their scope', functio
 
     expect(Student::query()->where('section_id', $ownSection->id)->count())->toBe(0);
 });
+
+it('allows a dean to view an intern profile in their scope', function () {
+    $this->seed(RoleSeeder::class);
+    $this->seed(SchoolYearSeeder::class);
+
+    $deanRoleId = Role::query()->where('name', 'dean')->value('id');
+    $internRoleId = Role::query()->where('name', 'intern')->value('id');
+    $schoolYear = SchoolYear::query()->where('name', '2025-2026')->firstOrFail();
+
+    $dean = User::factory()->create([
+        'role_id' => $deanRoleId,
+    ]);
+
+    $course = Course::query()->create([
+        'code' => 'BSIT',
+        'name' => 'Bachelor of Science in Information Technology',
+        'required_hours' => 486,
+        'dean_user_id' => $dean->id,
+        'is_active' => true,
+    ]);
+
+    $section = Section::query()->create([
+        'course_id' => $course->id,
+        'school_year_id' => $schoolYear->id,
+        'name' => '4A',
+        'is_active' => true,
+    ]);
+
+    $internUser = User::factory()->create([
+        'role_id' => $internRoleId,
+        'email' => 'intern.view@gmail.com',
+    ]);
+
+    $student = Student::query()->create([
+        'user_id' => $internUser->id,
+        'section_id' => $section->id,
+        'student_number' => '2022-1-09999',
+        'first_name' => 'View',
+        'last_name' => 'Test',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($dean)
+        ->get(route('deans.students.show', $student))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('deans/students/show')
+            ->where('student.full_name', 'View Test')
+            ->has('progress')
+            ->has('documents')
+            ->has('attendance_journal'));
+});

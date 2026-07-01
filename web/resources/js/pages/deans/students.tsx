@@ -1,8 +1,9 @@
 import { Head, Link } from '@inertiajs/react';
-import { ChevronDown, Search, Users } from 'lucide-react';
+import { ChevronDown, Eye, Search, Users } from 'lucide-react';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/superadmin/page-header';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
     Collapsible,
@@ -130,6 +131,9 @@ function persistStudentGroupState(state: Record<number, boolean>): void {
 }
 
 function StudentGroupTable({ students }: { students: StudentRow[] }) {
+    const portalRoutes = useDeanPortalRoutes();
+    const showStudent = portalRoutes.students.show;
+
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -142,6 +146,9 @@ function StudentGroupTable({ students }: { students: StudentRow[] }) {
                         <th className="px-4 py-3 font-medium">OJT Company</th>
                         <th className="px-4 py-3 font-medium">Supervisor</th>
                         <th className="px-4 py-3 font-medium">Status</th>
+                        <th className="px-4 py-3 text-right font-medium">
+                            Actions
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -216,6 +223,23 @@ function StudentGroupTable({ students }: { students: StudentRow[] }) {
                                 >
                                     {student.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                                {showStudent ? (
+                                    <Button
+                                        asChild
+                                        variant="outline"
+                                        size="sm"
+                                    >
+                                        <Link
+                                            href={showStudent(student.id).url}
+                                            prefetch
+                                        >
+                                            <Eye className="mr-1 size-3.5" />
+                                            View
+                                        </Link>
+                                    </Button>
+                                ) : null}
                             </td>
                         </tr>
                     ))}

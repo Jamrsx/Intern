@@ -107,6 +107,13 @@ class DeanPortalScope
         return true;
     }
 
+    public static function studentBelongsToScope(User $user, Student $student): bool
+    {
+        return self::studentsQuery($user)
+            ->whereKey($student->id)
+            ->exists();
+    }
+
     /**
      * @return array<string, mixed>|null
      */

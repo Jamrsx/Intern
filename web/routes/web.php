@@ -84,6 +84,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('school-years/{school_year}/activate', [DeanSchoolYearController::class, 'activate'])
                 ->name('school-years.activate');
 
+            Route::get('students/{student}/documents/{document}', [DeanStudentController::class, 'showDocument'])
+                ->name('students.documents.show');
+            Route::get('students/{student}/task-photos/{taskPhoto}', [DeanStudentController::class, 'showTaskPhoto'])
+                ->name('students.task-photos.show');
+            Route::get('students/{student}/absences/{absence}/proof', [DeanStudentController::class, 'showAbsenceProof'])
+                ->name('students.absences.proof.show');
+            Route::get('students/{student}', [DeanStudentController::class, 'show'])
+                ->name('students.show');
             Route::post('students/bulk', [DeanStudentController::class, 'bulkStore'])
                 ->name('students.bulk-store');
             Route::post('students', [DeanStudentController::class, 'store'])
@@ -108,6 +116,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
             Route::get('students', [ProgramHeadStudentController::class, 'index'])
                 ->name('students.index');
+
+            Route::get('students/{student}/documents/{document}', [ProgramHeadStudentController::class, 'showDocument'])
+                ->name('students.documents.show');
+            Route::get('students/{student}/task-photos/{taskPhoto}', [ProgramHeadStudentController::class, 'showTaskPhoto'])
+                ->name('students.task-photos.show');
+            Route::get('students/{student}/absences/{absence}/proof', [ProgramHeadStudentController::class, 'showAbsenceProof'])
+                ->name('students.absences.proof.show');
+            Route::get('students/{student}', [ProgramHeadStudentController::class, 'show'])
+                ->name('students.show');
 
             Route::get('sections', [ProgramHeadSectionController::class, 'index'])
                 ->name('sections.index');

@@ -1,8 +1,7 @@
-import { index as studentsIndex } from '@/routes/programhead/students';
 import {
-    bulkStore as bulkStoreStudents,
-    store as storeStudent,
-} from '@/routes/deans/students';
+    index as studentsIndex,
+    show as programHeadShowStudent,
+} from '@/routes/programhead/students';
 import { index as sectionsIndex } from '@/routes/programhead/sections';
 import { index as coordinatorsIndex } from '@/routes/programhead/coordinators';
 import { deanPortalRoutes, type DeanPortalRoutes } from '@/lib/dean-portal-routes';
@@ -13,8 +12,7 @@ export const programHeadPortalRoutes: DeanPortalRoutes = {
     studentsReadOnly: true,
     students: {
         index: studentsIndex,
-        store: storeStudent,
-        bulkStore: bulkStoreStudents,
+        show: programHeadShowStudent,
     },
     sections: {
         ...deanPortalRoutes.sections,

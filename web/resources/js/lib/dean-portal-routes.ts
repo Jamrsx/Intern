@@ -1,6 +1,7 @@
 import {
     bulkStore as bulkStoreStudents,
     index as studentsIndex,
+    show as showStudent,
     store as storeStudent,
 } from '@/routes/deans/students';
 import {
@@ -27,6 +28,7 @@ import {
 
 export type DeanPortalStudentsRoutes = {
     index: typeof studentsIndex;
+    show: typeof showStudent;
     store?: typeof storeStudent;
     bulkStore?: typeof bulkStoreStudents;
 };
@@ -71,6 +73,7 @@ export const deanPortalRoutes: DeanPortalRoutes = {
     studentsReadOnly: false,
     students: {
         index: studentsIndex,
+        show: showStudent,
         store: storeStudent,
         bulkStore: bulkStoreStudents,
     },
