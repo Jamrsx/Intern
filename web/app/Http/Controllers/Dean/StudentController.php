@@ -5,13 +5,19 @@ namespace App\Http\Controllers\Dean;
 use App\Http\Controllers\Concerns\ResolvesDeanPortalPresentation;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Dean\Concerns\ResolvesDeanScope;
+use App\Http\Requests\Dean\BulkStoreStudentRequest;
+use App\Http\Requests\Dean\StoreStudentRequest;
 use App\Models\Company;
 use App\Models\Course;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\Supervisor;
 use App\Support\DeanPortalScope;
+use App\Support\StudentAccountService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 use Inertia\Response;
 
 class StudentController extends Controller
@@ -35,6 +41,52 @@ class StudentController extends Controller
             'companies' => $companies,
             'supervisors' => $supervisors,
         ]);
+    }
+
+    public function store(StoreStudentRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        $result = DB::transaction(fn () => app(StudentAccountService::class)->create([
+            ...$validated,
+            'password' => $validated['password'] ?? StudentAccountService::DEFAULT_PASSWORD,
+        ]));
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "Student {$result['student']->fullName()} created. Temporary password: {$result['password']}",
+        ]);
+
+        return redirect()->route('deans.students.index');
+    }
+
+    public function bulkStore(BulkStoreStudentRequest $request): RedirectResponse
+    {
+        $validated = $request->validated();
+        $service = app(StudentAccountService::class);
+        $fallbackSectionId = $validated['section_id'] ?? null;
+        $createdCount = 0;
+
+        DB::transaction(function () use ($validated, $service, $fallbackSectionId, &$createdCount) {
+            foreach ($validated['students'] as $studentData) {
+                $sectionId = $studentData['section_id'] ?? $fallbackSectionId;
+
+                $service->create([
+                    ...$studentData,
+                    'email' => $studentData['email'] ?? $service->generatedBulkEmail($studentData['student_number']),
+                    'section_id' => $sectionId,
+                ]);
+
+                $createdCount++;
+            }
+        });
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => "{$createdCount} student account(s) created. Default password is \"".StudentAccountService::DEFAULT_PASSWORD.'" for each account.',
+        ]);
+
+        return redirect()->route('deans.students.index');
     }
 
     /**

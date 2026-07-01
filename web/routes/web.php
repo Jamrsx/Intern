@@ -84,6 +84,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::patch('school-years/{school_year}/activate', [DeanSchoolYearController::class, 'activate'])
                 ->name('school-years.activate');
 
+            Route::post('students/bulk', [DeanStudentController::class, 'bulkStore'])
+                ->name('students.bulk-store');
+            Route::post('students', [DeanStudentController::class, 'store'])
+                ->name('students.store');
             Route::get('students', [DeanStudentController::class, 'index'])
                 ->name('students.index');
 

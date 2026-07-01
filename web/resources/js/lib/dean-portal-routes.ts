@@ -1,5 +1,7 @@
 import {
+    bulkStore as bulkStoreStudents,
     index as studentsIndex,
+    store as storeStudent,
 } from '@/routes/deans/students';
 import {
     destroy as destroyCoordinator,
@@ -25,6 +27,8 @@ import {
 
 export type DeanPortalStudentsRoutes = {
     index: typeof studentsIndex;
+    store?: typeof storeStudent;
+    bulkStore?: typeof bulkStoreStudents;
 };
 
 export type DeanPortalSectionsRoutes = {
@@ -64,9 +68,11 @@ export type DeanPortalRoutes = {
 export const deanPortalRoutes: DeanPortalRoutes = {
     badgeText: 'Dean',
     readOnly: false,
-    studentsReadOnly: true,
+    studentsReadOnly: false,
     students: {
         index: studentsIndex,
+        store: storeStudent,
+        bulkStore: bulkStoreStudents,
     },
     sections: {
         index: sectionsIndex,

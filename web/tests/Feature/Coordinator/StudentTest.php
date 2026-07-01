@@ -140,7 +140,7 @@ it('allows a coordinator to email student credentials individually and in bulk',
     Mail::assertSent(StudentAccountCredentialsMail::class, 3);
 });
 
-it('prevents a dean from mutating students', function () {
+it('allows a dean to create students in their course sections', function () {
     $this->seed(RoleSeeder::class);
     $this->seed(SchoolYearSeeder::class);
 
@@ -167,14 +167,14 @@ it('prevents a dean from mutating students', function () {
     ]);
 
     $this->actingAs($dean)
-        ->post('/deans/students', [
+        ->post(route('deans.students.store'), [
             'student_number' => '2022-1-04311',
             'email' => 'john.doe@gmail.com',
             'first_name' => 'John',
             'last_name' => 'Doe',
             'section_id' => $section->id,
         ])
-        ->assertMethodNotAllowed();
+        ->assertRedirect(route('deans.students.index'));
 
     $this->actingAs($dean)
         ->get(route('deans.students.index'))

@@ -143,14 +143,14 @@ it('blocks a program head from mutating portal data', function () {
         ->assertForbidden();
 
     $this->actingAs($this->fmHead)
-        ->post('/deans/students', [
+        ->post(route('deans.students.store'), [
             'student_number' => '2022-1-00001',
             'email' => 'new.student@gmail.com',
             'first_name' => 'New',
             'last_name' => 'Student',
             'section_id' => $this->fmSection->id,
         ])
-        ->assertMethodNotAllowed();
+        ->assertForbidden();
 });
 
 it('blocks a program head from updating another major section via dean routes', function () {
@@ -185,12 +185,12 @@ it('renders program head portal pages and blocks dean routes', function () {
         ->assertForbidden();
 
     $this->actingAs($this->fmHead)
-        ->post('/deans/students', [
+        ->post(route('deans.students.store'), [
             'student_number' => '2022-1-00002',
             'email' => 'blocked@gmail.com',
             'first_name' => 'Blocked',
             'last_name' => 'Student',
             'section_id' => $this->fmSection->id,
         ])
-        ->assertMethodNotAllowed();
+        ->assertForbidden();
 });

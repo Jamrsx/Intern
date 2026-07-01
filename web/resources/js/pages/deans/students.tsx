@@ -21,6 +21,11 @@ import {
 import { DeanPortalRoutesProvider } from '@/contexts/dean-portal-routes-context';
 import { useDeanPortalRoutes } from '@/contexts/dean-portal-routes-context';
 import { deanPortalRoutes } from '@/lib/dean-portal-routes';
+import {
+    DeanSectionAddStudentButton,
+    DeanStudentAccountsProvider,
+    DeanStudentHeaderActions,
+} from '@/components/deans/dean-student-accounts';
 import { cn } from '@/lib/utils';
 
 type Course = {
@@ -331,7 +336,10 @@ export function DeanStudentsPage({ course, sections, students }: Props) {
     };
 
     return (
-        <>
+        <DeanStudentAccountsProvider
+            courseCode={course?.code ?? ''}
+            sections={sections}
+        >
             <Head title="Students" />
 
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
@@ -339,11 +347,16 @@ export function DeanStudentsPage({ course, sections, students }: Props) {
                     title="Students"
                     description={
                         course
-                            ? `View students, sections, and coordinators for ${course.major?.display_name ?? course.code}. Student accounts are managed by section coordinators.`
+                            ? `Manage students and section assignments for ${course.major?.display_name ?? course.code}.`
                             : 'You need an assigned course before you can view students.'
                     }
                     icon={Users}
                     badgeText={portalRoutes.badgeText}
+                    action={
+                        course && sections.length > 0 ? (
+                            <DeanStudentHeaderActions />
+                        ) : undefined
+                    }
                 />
 
                 {!course && (
@@ -458,93 +471,126 @@ export function DeanStudentsPage({ course, sections, students }: Props) {
                                     }
                                 >
                                     <Card className="overflow-hidden border-sidebar-border/70 py-0">
-                                        <CollapsibleTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-muted/40"
-                                            >
-                                                <div className="min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <h3 className="font-semibold">
-                                                            {group.displayName}
-                                                        </h3>
-                                                        {group.schoolYear && (
-                                                            <Badge variant="secondary">
-                                                                {group.schoolYear}
-                                                            </Badge>
-                                                        )}
-                                                        <Badge
-                                                            variant={
-                                                                group.students
-                                                                    .length === 0
-                                                                    ? 'secondary'
-                                                                    : 'default'
-                                                            }
-                                                            className={
-                                                                group.students
-                                                                    .length === 0
-                                                                    ? ''
-                                                                    : 'bg-brand text-brand-foreground hover:bg-brand'
-                                                            }
-                                                        >
-                                                            {group.students
-                                                                .length === 0
-                                                                ? 'Empty section'
-                                                                : `${group.students.length} ${
-                                                                      group
-                                                                          .students
-                                                                          .length ===
-                                                                      1
-                                                                          ? 'student'
-                                                                          : 'students'
-                                                                  }`}
-                                                        </Badge>
-                                                    </div>
-                                                    <p className="mt-1 text-sm text-muted-foreground">
-                                                        Coordinator:{' '}
-                                                        {group.coordinator ? (
-                                                            <span className="text-foreground">
+                                        <div className="flex items-center gap-2 px-4 py-4">
+                                            <CollapsibleTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="flex min-w-0 flex-1 items-center gap-4 text-left transition-colors hover:bg-muted/40"
+                                                >
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <h3 className="font-semibold">
                                                                 {
-                                                                    group
-                                                                        .coordinator
-                                                                        .name
+                                                                    group.displayName
                                                                 }
-                                                                <span className="text-muted-foreground">
-                                                                    {' '}
-                                                                    (
+                                                            </h3>
+                                                            {group.schoolYear && (
+                                                                <Badge variant="secondary">
+                                                                    {
+                                                                        group.schoolYear
+                                                                    }
+                                                                </Badge>
+                                                            )}
+                                                            <Badge
+                                                                variant={
+                                                                    group
+                                                                        .students
+                                                                        .length ===
+                                                                    0
+                                                                        ? 'secondary'
+                                                                        : 'default'
+                                                                }
+                                                                className={
+                                                                    group
+                                                                        .students
+                                                                        .length ===
+                                                                    0
+                                                                        ? ''
+                                                                        : 'bg-brand text-brand-foreground hover:bg-brand'
+                                                                }
+                                                            >
+                                                                {group.students
+                                                                    .length ===
+                                                                0
+                                                                    ? 'Empty section'
+                                                                    : `${group.students.length} ${
+                                                                          group
+                                                                              .students
+                                                                              .length ===
+                                                                          1
+                                                                              ? 'student'
+                                                                              : 'students'
+                                                                      }`}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="mt-1 text-sm text-muted-foreground">
+                                                            Coordinator:{' '}
+                                                            {group.coordinator ? (
+                                                                <span className="text-foreground">
                                                                     {
                                                                         group
                                                                             .coordinator
-                                                                            .email
+                                                                            .name
                                                                     }
-                                                                    )
+                                                                    <span className="text-muted-foreground">
+                                                                        {' '}
+                                                                        (
+                                                                        {
+                                                                            group
+                                                                                .coordinator
+                                                                                .email
+                                                                        }
+                                                                        )
+                                                                    </span>
                                                                 </span>
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-amber-600">
-                                                                Unassigned
-                                                            </span>
+                                                            ) : (
+                                                                <span className="text-amber-600">
+                                                                    Unassigned
+                                                                </span>
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            </CollapsibleTrigger>
+                                            <DeanSectionAddStudentButton
+                                                sectionId={group.sectionId}
+                                                displayName={group.displayName}
+                                            />
+                                            <CollapsibleTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/40"
+                                                    aria-label={`Toggle ${group.displayName}`}
+                                                >
+                                                    <ChevronDown
+                                                        className={cn(
+                                                            'size-5 transition-transform',
+                                                            isGroupOpen(
+                                                                group,
+                                                            ) && 'rotate-180',
                                                         )}
-                                                    </p>
-                                                </div>
-                                                <ChevronDown
-                                                    className={cn(
-                                                        'size-5 shrink-0 text-muted-foreground transition-transform',
-                                                        isGroupOpen(group) &&
-                                                            'rotate-180',
-                                                    )}
-                                                />
-                                            </button>
-                                        </CollapsibleTrigger>
+                                                    />
+                                                </button>
+                                            </CollapsibleTrigger>
+                                        </div>
 
                                         <CollapsibleContent>
                                             <div className="border-t">
                                                 {group.students.length === 0 ? (
-                                                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-                                                        No students in this
-                                                        section yet. Coordinators
-                                                        can add students from
-                                                        their portal.
+                                                    <div className="flex flex-col items-center gap-4 px-4 py-8 text-center text-sm text-muted-foreground">
+                                                        <p>
+                                                            No students in this
+                                                            section yet.
+                                                        </p>
+                                                        <DeanSectionAddStudentButton
+                                                            sectionId={
+                                                                group.sectionId
+                                                            }
+                                                            displayName={
+                                                                group.displayName
+                                                            }
+                                                            variant="default"
+                                                        />
                                                     </div>
                                                 ) : (
                                                     <StudentGroupTable
@@ -560,7 +606,7 @@ export function DeanStudentsPage({ course, sections, students }: Props) {
                     </div>
                 )}
             </div>
-        </>
+        </DeanStudentAccountsProvider>
     );
 }
 

@@ -365,6 +365,10 @@ export function parseStudentImportFile(
 
                     if (sectionResult.error) {
                         errors.push(sectionResult.error);
+                    } else if (sectionResult.willCreateSection) {
+                        errors.push(
+                            `Section "${values.section_label.trim()}" was not found. Use an existing section name.`,
+                        );
                     }
 
                     parsedRows.push({
